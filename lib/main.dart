@@ -31,8 +31,8 @@ import 'screens/shared/mapel_dashboard.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
-    url: 'https://ydoryrdmwoibxnwqzdcj.supabase.co',
-    publishableKey: 'sb_publishable_6ulK5n2egCVu7pdAYftqzw_Ehsyf0Xo',
+    url: 'https://asflwdvbtufxzojlrdhg.supabase.co',
+    publishableKey: 'sb_publishable_SZ7Sxxw4v8dHLt-ME3shpg_Qrv9w2bk',
   );
   runApp(const MyApp());
 }
@@ -57,11 +57,16 @@ class MyApp extends StatelessWidget {
 
           // Face Scan
           case '/face-scan':
-            final args = settings.arguments as Map<String, dynamic>? ?? {'type': 'masuk', 'scheduleId': ''};
-            return _buildRoute(FaceScanScreen(
-              type: args['type'] as String,
-              scheduleId: args['scheduleId'] as String,
-            ), settings);
+            final args =
+                settings.arguments as Map<String, dynamic>? ??
+                {'type': 'masuk', 'scheduleId': ''};
+            return _buildRoute(
+              FaceScanScreen(
+                type: args['type'] as String,
+                scheduleId: args['scheduleId'] as String,
+              ),
+              settings,
+            );
 
           // Student
           case '/student-dashboard':
@@ -98,11 +103,19 @@ class MyApp extends StatelessWidget {
             return _buildRoute(const AdminScheduleScreen(), settings);
           case '/admin-users':
             return _buildRoute(const AdminUsers(), settings);
-            
+
           // Shared
           case '/mapel-dashboard':
-            final args = settings.arguments as Map<String, dynamic>? ?? {'scheduleId': '1', 'role': 'student'};
-            return _buildRoute(MapelDashboardScreen(scheduleId: args['scheduleId'], role: args['role']), settings);
+            final args =
+                settings.arguments as Map<String, dynamic>? ??
+                {'scheduleId': '1', 'role': 'student'};
+            return _buildRoute(
+              MapelDashboardScreen(
+                scheduleId: args['scheduleId'],
+                role: args['role'],
+              ),
+              settings,
+            );
 
           default:
             return _buildRoute(const LoginScreen(), settings);
@@ -112,9 +125,6 @@ class MyApp extends StatelessWidget {
   }
 
   MaterialPageRoute _buildRoute(Widget page, RouteSettings settings) {
-    return MaterialPageRoute(
-      builder: (_) => page,
-      settings: settings,
-    );
+    return MaterialPageRoute(builder: (_) => page, settings: settings);
   }
 }

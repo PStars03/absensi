@@ -670,7 +670,7 @@ packages:
     source: hosted
     version: "1.4.1"
   supabase:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: supabase
       sha256: ebae283b56df8a97491b8484aa34b60115c60bc612de24bd83b4918c85a14f31
