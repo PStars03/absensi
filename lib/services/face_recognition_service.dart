@@ -19,6 +19,7 @@ class FaceRecognitionService {
       debugPrint('Face Recognition Model Loaded Successfully.');
     } catch (e) {
       debugPrint('Error loading model: $e');
+      throw Exception('Gagal load model TFLite: $e');
     }
   }
 
@@ -62,30 +63,45 @@ class FaceRecognitionService {
       // 3. Resize ke ukuran 112x112 sesuai input MobileFaceNet
       img.Image resizedFace = img.copyResize(croppedFace, width: 112, height: 112);
 
-      // 4. Konversi ke bentuk matriks RGB float32 [-1, 1]
-      // MobileFaceNet input shape: [1, 112, 112, 3]
-      var input = List.generate(1, (i) => 
-        List.generate(112, (y) => 
-          List.generate(112, (x) {
-            final pixel = resizedFace.getPixel(x, y);
-            return [
-              (pixel.r - 127.5) / 128.0,
-              (pixel.g - 127.5) / 128.0,
-              (pixel.b - 127.5) / 128.0
-            ];
-          })
-        )
-      );
+      // 4. Konversi ke bentuk 4D List [1, 112, 112, 3] agar aman
+      var input = List.generate(1, (i) => List.generate(112, (y) => List.generate(112, (x) => List.filled(3, 0.0))));
+      for (int y = 0; y < 112; y++) {
+        for (int x = 0; x < 112; x++) {
+          final pixel = resizedFace.getPixel(x, y);
+          input[0][y][x][0] = (pixel.r - 127.5) / 128.0;
+          input[0][y][x][1] = (pixel.g - 127.5) / 128.0;
+          input[0][y][x][2] = (pixel.b - 127.5) / 128.0;
+        }
+      }
 
       // 5. Run inference
-      // Output shape untuk MobileFaceNet: [1, 192]
-      var output = List.generate(1, (i) => List.filled(192, 0.0));
+      // Dapatkan dimensi output sesungguhnya dari model (contoh: [1, 192] atau [192])
+      var outputShape = _interpreter!.getOutputTensor(0).shape;
+      
+      Object output;
+      if (outputShape.length == 1) {
+         output = List.filled(outputShape[0], 0.0);
+      } else {
+         // asumsi shape = [1, x]
+         output = List.generate(1, (i) => List.filled(outputShape[1], 0.0));
+      }
+      
       _interpreter!.run(input, output);
 
-      return output[0];
+      // Kembalikan hasil flat list
+      if (output is List<double>) {
+         return output;
+      } else if (output is List<List<double>>) {
+         return output[0];
+      } else if (output is List && output.isNotEmpty && output[0] is List) {
+         return (output[0] as List).cast<double>();
+      } else if (output is List) {
+         return output.cast<double>();
+      }
+      return null;
     } catch (e) {
       debugPrint('Error extracting embedding: $e');
-      return null;
+      throw Exception('TFLite Error: $e');
     }
   }
 
@@ -103,6 +119,9 @@ class FaceRecognitionService {
   // --- Helper: Konversi CameraImage ke package:image ---
   static img.Image? _convertCameraImage(CameraImage image) {
     if (Platform.isAndroid) {
+      if (image.format.group == ImageFormatGroup.nv21 || image.planes.length == 1) {
+        return _convertNV21(image);
+      }
       return _convertYUV420(image);
     } else if (Platform.isIOS) {
       return _convertBGRA8888(image);
@@ -117,6 +136,61 @@ class FaceRecognitionService {
       bytes: image.planes[0].bytes.buffer,
       order: img.ChannelOrder.bgra,
     );
+  }
+
+  static img.Image _convertNV21(CameraImage image) {
+    final int width = image.width;
+    final int height = image.height;
+    final img.Image decoded = img.Image(width: width, height: height);
+    
+    if (image.planes.isEmpty) return decoded;
+    
+    final yBytes = image.planes[0].bytes;
+    final vuBytes = image.planes.length > 1 ? image.planes[1].bytes : yBytes;
+    final int vuOffset = image.planes.length > 1 ? 0 : width * height;
+
+    for (int j = 0, yp = 0; j < height; j++) {
+      int uvp = vuOffset + (j >> 1) * width;
+      int u = 0;
+      int v = 0;
+      for (int i = 0; i < width; i++, yp++) {
+        if (yp >= yBytes.length) break;
+        
+        int y = (0xff & yBytes[yp]) - 16;
+        if (y < 0) y = 0;
+        
+        if ((i & 1) == 0 && uvp < vuBytes.length - 1) {
+          v = (0xff & vuBytes[uvp++]) - 128;
+          u = (0xff & vuBytes[uvp++]) - 128;
+        }
+
+        int y1192 = 1192 * y;
+        int r = (y1192 + 1634 * v);
+        int g = (y1192 - 833 * v - 400 * u);
+        int b = (y1192 + 2066 * u);
+
+        if (r < 0) {
+          r = 0;
+        } else if (r > 262143) {
+          r = 262143;
+        }
+        
+        if (g < 0) {
+          g = 0;
+        } else if (g > 262143) {
+          g = 262143;
+        }
+        
+        if (b < 0) {
+          b = 0;
+        } else if (b > 262143) {
+          b = 262143;
+        }
+
+        decoded.setPixelRgb(i, j, (r >> 10) & 0xff, (g >> 10) & 0xff, (b >> 10) & 0xff);
+      }
+    }
+    return decoded;
   }
 
   static img.Image _convertYUV420(CameraImage image) {

@@ -103,12 +103,17 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'G';
 
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      body: StreamBuilder<Map<String, int>>(
+        stream: SupabaseService.getTeacherDashboardStatsStream(),
+        builder: (context, snapshot) {
+          final stats = snapshot.data ?? {'total_siswa': 0, 'hadir_hari_ini': 0, 'tugas_aktif': 0};
+          
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               // Header
               Row(
                 children: [
@@ -141,12 +146,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
               // Stats
               Row(
-                children: const [
-                  Expanded(child: StatCard(icon: Icons.people_rounded, value: '32', label: 'Total Siswa', color: AppColors.primaryBlue)),
-                  SizedBox(width: 10),
-                  Expanded(child: StatCard(icon: Icons.check_circle_rounded, value: '28', label: 'Hadir Hari Ini', color: AppColors.success)),
-                  SizedBox(width: 10),
-                  Expanded(child: StatCard(icon: Icons.assignment_rounded, value: '5', label: 'Tugas Aktif', color: Color(0xFFEC4899))),
+                children: [
+                  Expanded(child: StatCard(icon: Icons.people_rounded, value: '${stats['total_siswa']}', label: 'Total Siswa', color: AppColors.primaryBlue)),
+                  const SizedBox(width: 10),
+                  Expanded(child: StatCard(icon: Icons.check_circle_rounded, value: '${stats['hadir_hari_ini']}', label: 'Hadir Hari Ini', color: AppColors.success)),
+                  const SizedBox(width: 10),
+                  Expanded(child: StatCard(icon: Icons.assignment_rounded, value: '${stats['tugas_aktif']}', label: 'Tugas Aktif', color: const Color(0xFFEC4899))),
                 ],
               ),
               const SizedBox(height: 24),
@@ -162,6 +167,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   const SizedBox(width: 10),
                   _buildMenuCard('Wali Kelas', Icons.admin_panel_settings_rounded, const Color(0xFFF59E0B), () {
                     Navigator.pushNamed(context, '/wali-kelas');
+                  }),
+                  const SizedBox(width: 10),
+                  _buildMenuCard('Laporan', Icons.insert_chart_outlined_rounded, AppColors.success, () {
+                    Navigator.pushNamed(context, '/teacher-reports');
                   }),
                 ],
               ),
@@ -186,10 +195,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             ],
           ),
         ),
-      ),
-      bottomNavigationBar: AppBottomNav(currentIndex: _currentNavIndex, role: 'teacher', onTap: _onNavTap),
-    );
-  }
+      );
+    }),
+    bottomNavigationBar: AppBottomNav(currentIndex: _currentNavIndex, role: 'teacher', onTap: _onNavTap),
+  );
+}
 
 
   Widget _buildMenuCard(String label, IconData icon, Color color, VoidCallback onTap) {

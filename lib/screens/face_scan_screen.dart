@@ -35,6 +35,7 @@ class _FaceScanScreenState extends State<FaceScanScreen> with SingleTickerProvid
   );
   
   bool _isBusy = false;
+  bool _isProcessing = false;
   bool _isCameraInitialized = false;
 
   // Step tracking
@@ -110,7 +111,7 @@ class _FaceScanScreenState extends State<FaceScanScreen> with SingleTickerProvid
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
-    if (_isBusy || _currentStep > 1) return;
+    if (_isBusy || _isProcessing || _currentStep > 1) return;
     _isBusy = true;
 
     try {
@@ -154,6 +155,7 @@ class _FaceScanScreenState extends State<FaceScanScreen> with SingleTickerProvid
         // Ekstrak embedding wajah dari kamera
         final liveEmbedding = await FaceRecognitionService.extractFaceEmbedding(image, faces.first, camera.sensorOrientation);
         if (liveEmbedding == null) {
+          _isProcessing = false;
           setState(() {
             _statusMessage = 'Gagal memproses wajah. Coba lagi.';
             _currentStep = 1;
@@ -163,12 +165,19 @@ class _FaceScanScreenState extends State<FaceScanScreen> with SingleTickerProvid
         }
 
         // Ambil embedding yang tersimpan di DB
-
-        final student = await SupabaseService.getStudentProfile();
-        final savedEmbeddingHex = student?['face_embedding'] as String?;
+        final profile = await SupabaseService.getCurrentUserProfile();
+        String? savedEmbeddingHex;
+        if (profile?['role'] == 'teacher') {
+          final teacher = await SupabaseService.getTeacherProfile();
+          savedEmbeddingHex = teacher?['face_embedding'] as String?;
+        } else {
+          final student = await SupabaseService.getStudentProfile();
+          savedEmbeddingHex = student?['face_embedding'] as String?;
+        }
         final savedEmbedding = SupabaseService.decodeFaceEmbedding(savedEmbeddingHex);
 
         if (savedEmbedding == null || savedEmbedding.isEmpty) {
+          _isProcessing = false;
           setState(() {
             _statusMessage = 'Data wajah belum terdaftar!';
             _currentStep = 1;
@@ -181,6 +190,7 @@ class _FaceScanScreenState extends State<FaceScanScreen> with SingleTickerProvid
         debugPrint('Face Distance: $distance');
 
         if (distance > 1.0) { // Threshold toleransi kemiripan
+          _isProcessing = false;
           setState(() {
             _statusMessage = 'Wajah tidak cocok! ($distance)';
             _currentStep = 1;
@@ -200,6 +210,16 @@ class _FaceScanScreenState extends State<FaceScanScreen> with SingleTickerProvid
       }
     } catch (e) {
       debugPrint('Error in face scan: $e');
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'Gagal memproses wajah: $e';
+          _currentStep = 1;
+        });
+        _isProcessing = false;
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted && _currentStep == 1) _startCapture();
+        });
+      }
     } finally {
       _isBusy = false;
     }

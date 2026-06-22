@@ -28,7 +28,6 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
   List<Map<String, dynamic>> _attendances = [];
   List<Map<String, dynamic>> _materials = [];
   List<Map<String, dynamic>> _tasks = [];
-  List<Map<String, dynamic>> _quizzes = [];
 
   @override
   void initState() {
@@ -51,7 +50,6 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
         SupabaseService.getScheduleAttendances(widget.scheduleId),
         SupabaseService.getMaterials(widget.scheduleId),
         SupabaseService.getTasks(widget.scheduleId),
-        SupabaseService.getQuizzes(widget.scheduleId),
       ]);
 
       if (mounted) {
@@ -60,7 +58,6 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
           _attendances = results[0];
           _materials = results[1];
           _tasks = results[2];
-          _quizzes = results[3];
           _isLoading = false;
         });
       }
@@ -150,6 +147,22 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                           ),
                         ],
                       ),
+                      if (widget.role == 'student') ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _showIzinForm,
+                            icon: const Icon(Icons.edit_document),
+                            label: const Text('Ajukan Izin / Sakit'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -179,7 +192,6 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.fact_check_rounded), label: 'Absensi'),
           BottomNavigationBarItem(icon: Icon(Icons.menu_book_rounded), label: 'Materi'),
           BottomNavigationBarItem(icon: Icon(Icons.assignment_rounded), label: 'Tugas'),
-          BottomNavigationBarItem(icon: Icon(Icons.quiz_rounded), label: 'Kuis'),
         ],
       ),
     );
@@ -193,8 +205,6 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
         return _buildMateriTab();
       case 2:
         return _buildTugasTab();
-      case 3:
-        return _buildKuisTab();
       default:
         return _buildAbsensiTab();
     }
@@ -237,8 +247,114 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
   }
 
   // =========================================================================
-  // Absensi
+  // Absensi & Izin
   // =========================================================================
+
+  void _showIzinForm() {
+    File? suratIzinFile;
+    File? fotoOrtuFile;
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24, right: 24, top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 20),
+                const Text('Pengajuan Izin / Sakit', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 20),
+                
+                // Surat Izin
+                const Text('Lampirkan Surat Izin/Sakit (Foto)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final result = await FilePicker.pickFiles(type: FileType.image);
+                    if (result != null) setStateModal(() => suratIzinFile = File(result.files.single.path!));
+                  },
+                  icon: const Icon(Icons.camera_alt_rounded),
+                  label: Text(suratIzinFile != null ? '✅ Surat Terlampir' : 'Pilih Foto Surat'),
+                ),
+                const SizedBox(height: 16),
+
+                // Foto Ortu
+                const Text('Foto Bersama Orang Tua/Wali', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final result = await FilePicker.pickFiles(type: FileType.image);
+                    if (result != null) setStateModal(() => fotoOrtuFile = File(result.files.single.path!));
+                  },
+                  icon: const Icon(Icons.family_restroom_rounded),
+                  label: Text(fotoOrtuFile != null ? '✅ Foto Terlampir' : 'Pilih Foto Bersama'),
+                ),
+                
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: isSaving || suratIzinFile == null || fotoOrtuFile == null ? null : () async {
+                      setStateModal(() => isSaving = true);
+                      try {
+                        final studentId = SupabaseService.currentUser!.id;
+                        final timestamp = DateTime.now().millisecondsSinceEpoch;
+                        
+                        final suratBytes = await suratIzinFile!.readAsBytes();
+                        final ortuBytes = await fotoOrtuFile!.readAsBytes();
+
+                        final suratExt = suratIzinFile!.path.split('.').last;
+                        final ortuExt = fotoOrtuFile!.path.split('.').last;
+
+                        final suratUrl = await SupabaseService.uploadFile(
+                          bucket: 'attendance_docs',
+                          path: '${widget.scheduleId}/${studentId}_surat_$timestamp.$suratExt',
+                          fileBytes: suratBytes,
+                        );
+
+                        final ortuUrl = await SupabaseService.uploadFile(
+                          bucket: 'attendance_docs',
+                          path: '${widget.scheduleId}/${studentId}_ortu_$timestamp.$ortuExt',
+                          fileBytes: ortuBytes,
+                        );
+
+                        await SupabaseService.checkInIzin(
+                          scheduleId: widget.scheduleId,
+                          suratIjinUrl: suratUrl,
+                          fotoBersamaOrtuUrl: ortuUrl,
+                        );
+
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Izin berhasil diajukan')));
+                        _fetchData();
+                      } catch (e) {
+                        setStateModal(() => isSaving = false);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengajukan izin: $e')));
+                      }
+                    },
+                    child: isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Ajukan Izin'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      ),
+    );
+  }
 
   Widget _buildAbsensiTab() {
     if (_attendances.isEmpty) {
@@ -264,9 +380,93 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
             title: Text(userName, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             subtitle: Text('${a['date']} • Masuk: $checkIn ${checkOut != "-" ? "• Pulang: $checkOut" : ""}', style: const TextStyle(fontSize: 12)),
             trailing: _buildStatusBadge(a['status'] ?? 'hadir'),
+            onTap: widget.role == 'teacher' ? () => _showEditAttendanceDialog(a) : null,
           ),
         );
       },
+    );
+  }
+
+  void _showEditAttendanceDialog(Map<String, dynamic> attendance) {
+    String currentStatus = attendance['status'] ?? 'hadir';
+    final userName = attendance['profiles']?['full_name'] ?? 'Siswa';
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          return Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 20),
+                Text('Ubah Absensi: $userName', style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 20),
+                DropdownButtonFormField<String>(
+                  initialValue: currentStatus,
+                  decoration: const InputDecoration(labelText: 'Status Kehadiran'),
+                  items: const [
+                    DropdownMenuItem(value: 'hadir', child: Text('Hadir')),
+                    DropdownMenuItem(value: 'terlambat', child: Text('Terlambat')),
+                    DropdownMenuItem(value: 'izin', child: Text('Izin')),
+                    DropdownMenuItem(value: 'sakit', child: Text('Sakit')),
+                    DropdownMenuItem(value: 'alpa', child: Text('Alpa')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setStateModal(() => currentStatus = val);
+                  },
+                ),
+                if ((attendance['surat_ijin_url'] != null || attendance['foto_bersama_ortu_url'] != null) && (currentStatus == 'izin' || currentStatus == 'sakit')) ...[
+                  const SizedBox(height: 16),
+                  const Text('Lampiran Izin/Sakit:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  if (attendance['surat_ijin_url'] != null)
+                    OutlinedButton.icon(
+                      onPressed: () => _openUrl(attendance['surat_ijin_url']),
+                      icon: const Icon(Icons.image_rounded),
+                      label: const Text('Lihat Surat Izin'),
+                    ),
+                  if (attendance['foto_bersama_ortu_url'] != null) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => _openUrl(attendance['foto_bersama_ortu_url']),
+                      icon: const Icon(Icons.family_restroom_rounded),
+                      label: const Text('Lihat Foto Bersama Ortu'),
+                    ),
+                  ],
+                ],
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        await SupabaseService.updateAttendanceStatus(
+                          attendanceId: attendance['id'],
+                          status: currentStatus,
+                        );
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status berhasil diperbarui')));
+                        _fetchData();
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memperbarui status: $e')));
+                      }
+                    },
+                    child: const Text('Simpan Perubahan'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      ),
     );
   }
 
@@ -425,7 +625,20 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             title: Text(t['title'] ?? 'Tugas', style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-            subtitle: Text('Tenggat: $deadlineStr\n${t['description'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Tenggat: $deadlineStr\n${t['description'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                if (t['file_url'] != null)
+                  InkWell(
+                    onTap: () => _openUrl(t['file_url']),
+                    child: const Padding(
+                      padding: EdgeInsets.only(top: 4.0),
+                      child: Text('📎 Lihat Lampiran', style: TextStyle(fontSize: 12, color: AppColors.primaryBlue, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+              ],
+            ),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _showTaskDetails(t),
           ),
@@ -439,6 +652,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
     final descCtrl = TextEditingController();
     DateTime? selectedDate;
     TimeOfDay? selectedTime;
+    File? selectedFile;
     bool isSaving = false;
 
     showModalBottomSheet(
@@ -489,6 +703,17 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'doc', 'docx', 'ppt', 'pptx']);
+                    if (result != null) {
+                      setStateModal(() => selectedFile = File(result.files.single.path!));
+                    }
+                  },
+                  icon: const Icon(Icons.attach_file_rounded),
+                  label: Text(selectedFile != null ? selectedFile!.path.split(Platform.pathSeparator).last : 'Lampirkan File (Opsional)'),
+                ),
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
@@ -502,6 +727,19 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                       setStateModal(() => isSaving = true);
 
                       try {
+                        String? fileUrl;
+                        if (selectedFile != null) {
+                          final ext = selectedFile!.path.split('.').last.toLowerCase();
+                          final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
+                          final bytes = await selectedFile!.readAsBytes();
+                          
+                          fileUrl = await SupabaseService.uploadFile(
+                            bucket: 'tasks',
+                            path: '${widget.scheduleId}/$fileName',
+                            fileBytes: bytes,
+                          );
+                        }
+
                         final deadline = DateTime(
                           selectedDate!.year, selectedDate!.month, selectedDate!.day,
                           selectedTime!.hour, selectedTime!.minute,
@@ -512,6 +750,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                           title: titleCtrl.text,
                           description: descCtrl.text,
                           deadline: deadline,
+                          fileUrl: fileUrl,
                         );
 
                         if (!ctx.mounted) return;
@@ -780,135 +1019,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
     );
   }
 
-  // =========================================================================
-  // Kuis
-  // =========================================================================
 
-  Widget _buildKuisTab() {
-    return Column(
-      children: [
-        if (widget.role == 'teacher')
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _showAddQuizForm,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Buat Kuis Baru'),
-              ),
-            ),
-          ),
-        Expanded(
-          child: _quizzes.isEmpty
-              ? const Center(child: Text('Belum ada kuis', style: TextStyle(fontFamily: 'Poppins')))
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _quizzes.length,
-                  itemBuilder: (context, index) {
-                    final q = _quizzes[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                          child: const Icon(Icons.quiz_rounded, color: Color(0xFF6366F1)),
-                        ),
-                        title: Text(q['title'] ?? 'Kuis', style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-                        subtitle: Text('${q['duration_minutes']} menit • Due: ${DateFormat('dd MMM yyyy, HH:mm').format(DateTime.parse(q['due_date']).toLocal())}', style: const TextStyle(fontSize: 12)),
-                        trailing: const Icon(Icons.chevron_right_rounded),
-                        onTap: () => _showQuizDetails(q),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  void _showAddQuizForm() {
-    final titleCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    final durationCtrl = TextEditingController(text: '60');
-    bool isSaving = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setStateModal) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 24, right: 24, top: 24,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-                const SizedBox(height: 20),
-                const Text('Buat Kuis Baru', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 20),
-                TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Judul Kuis')),
-                const SizedBox(height: 12),
-                TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Deskripsi')),
-                const SizedBox(height: 12),
-                TextField(controller: durationCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Durasi (menit)')),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: isSaving ? null : () async {
-                      if (titleCtrl.text.isEmpty || durationCtrl.text.isEmpty) return;
-                      setStateModal(() => isSaving = true);
-                      try {
-                        // Dummy single essay question for demonstration
-                        final dummyQuestion = {
-                          'question_text': 'Jelaskan pemahaman Anda mengenai materi ini!',
-                          'question_type': 'essay',
-                          'points': 100,
-                        };
-
-                        await SupabaseService.createQuiz(
-                          scheduleId: widget.scheduleId,
-                          title: titleCtrl.text,
-                          description: descCtrl.text,
-                          durationMinutes: int.parse(durationCtrl.text),
-                          dueDate: DateTime.now().add(const Duration(days: 1)).toUtc().toIso8601String(), // Due tomorrow
-                          questions: [dummyQuestion],
-                        );
-
-                        if (!ctx.mounted) return;
-                        Navigator.pop(ctx);
-                        if (!mounted) return;
-                        _fetchData();
-                      } catch (e) {
-                        setStateModal(() => isSaving = false);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuat kuis: $e')));
-                      }
-                    },
-                    child: isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan & Buat Kuis'),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-      ),
-    );
-  }
-
-  void _showQuizDetails(Map<String, dynamic> quiz) {
-    if (widget.role == 'teacher') {
-      Navigator.pushNamed(context, '/teacher-quiz-detail', arguments: quiz);
-    } else {
-      Navigator.pushNamed(context, '/student-quiz-attempt', arguments: quiz);
-    }
-  }
 
   // =========================================================================
   // Utilities

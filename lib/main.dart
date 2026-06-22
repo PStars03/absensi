@@ -15,6 +15,7 @@ import 'screens/student/student_schedule.dart';
 import 'screens/teacher/teacher_dashboard.dart';
 import 'screens/teacher/teacher_quiz_detail.dart';
 import 'screens/teacher/teacher_schedule.dart';
+import 'screens/teacher/teacher_reports.dart';
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/admin/admin_users.dart';
 import 'screens/admin/admin_gps_settings.dart';
@@ -87,6 +88,8 @@ class MyApp extends StatelessWidget {
           case '/teacher-quiz-detail':
             final args = settings.arguments as Map<String, dynamic>? ?? {};
             return _buildRoute(TeacherQuizDetailScreen(quiz: args), settings);
+          case '/teacher-reports':
+            return _buildRoute(const TeacherReportsScreen(), settings);
           case '/wali-kelas':
             return _buildRoute(const WaliKelasMonitoringScreen(), settings);
 

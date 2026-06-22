@@ -16,6 +16,23 @@ class StudentDashboard extends StatefulWidget {
 class _StudentDashboardState extends State<StudentDashboard> {
   final int _currentNavIndex = 0;
   Map<String, dynamic>? _userProfile;
+  bool _isLoadingProfile = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    final profile = await SupabaseService.getCurrentUserProfile();
+    if (mounted) {
+      setState(() {
+        _userProfile = profile;
+        _isLoadingProfile = false;
+      });
+    }
+  }
 
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
@@ -88,64 +105,66 @@ class _StudentDashboardState extends State<StudentDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _fetchDashboardData(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: _isLoadingProfile 
+          ? const Center(child: CircularProgressIndicator())
+          : StreamBuilder<List<Map<String, dynamic>>>(
+              stream: SupabaseService.getMyAttendancesStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          final data = snapshot.data;
-          final profile = data?['profile'] as Map<String, dynamic>? ?? {};
-          final attendances = (data?['attendances'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
-          
-          final fullName = profile['full_name'] as String? ?? 'Siswa';
+                final attendances = snapshot.data ?? [];
+                final fullName = _userProfile?['full_name'] as String? ?? 'Siswa';
+                final initial = fullName.isNotEmpty ? fullName[0].toUpperCase() : 'S';
 
-          return SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-                    child: const Text('A', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: AppColors.primaryBlue, fontSize: 18)),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                int countHadir = attendances.where((a) => a['status'] == 'hadir').length;
+                int countTerlambat = attendances.where((a) => a['status'] == 'terlambat').length;
+                int countAlpa = attendances.where((a) => a['status'] == 'alpa').length;
+
+                return SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Selamat Datang 👋', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
-                        Text(fullName, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.notifications_outlined),
-                    style: IconButton.styleFrom(backgroundColor: AppColors.background),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                        // Header
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                              child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: AppColors.primaryBlue, fontSize: 18)),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Selamat Datang 👋', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
+                                  Text(fullName, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () {},
+                              icon: const Icon(Icons.notifications_outlined),
+                              style: IconButton.styleFrom(backgroundColor: AppColors.background),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
 
-              // Removed global scan card per PRD (Scan is now per-mapel)
-
-              // Stats
-              Row(
-                children: const [
-                  Expanded(child: StatCard(icon: Icons.check_circle_rounded, value: '18', label: 'Hadir', color: AppColors.success)),
-                  SizedBox(width: 10),
-                  Expanded(child: StatCard(icon: Icons.schedule_rounded, value: '3', label: 'Terlambat', color: AppColors.warning)),
-                  SizedBox(width: 10),
-                  Expanded(child: StatCard(icon: Icons.cancel_rounded, value: '1', label: 'Alpa', color: AppColors.error)),
-                ],
-              ),
+                        // Stats
+                        Row(
+                          children: [
+                            Expanded(child: StatCard(icon: Icons.check_circle_rounded, value: countHadir.toString(), label: 'Hadir', color: AppColors.success)),
+                            const SizedBox(width: 10),
+                            Expanded(child: StatCard(icon: Icons.schedule_rounded, value: countTerlambat.toString(), label: 'Terlambat', color: AppColors.warning)),
+                            const SizedBox(width: 10),
+                            Expanded(child: StatCard(icon: Icons.cancel_rounded, value: countAlpa.toString(), label: 'Alpa', color: AppColors.error)),
+                          ],
+                        ),
               const SizedBox(height: 24),
 
               // Quick Actions
@@ -233,15 +252,5 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  Future<Map<String, dynamic>> _fetchDashboardData() async {
-    final profile = await SupabaseService.getCurrentUserProfile();
-    if (mounted) {
-      _userProfile = profile;
-    }
-    final attendances = await SupabaseService.getMyAttendances();
-    return {
-      'profile': profile,
-      'attendances': attendances,
-    };
-  }
+
 }

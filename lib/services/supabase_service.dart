@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
@@ -258,6 +258,29 @@ class SupabaseService {
     });
   }
 
+  static Future<void> checkInIzin({
+    required String scheduleId,
+    required String suratIjinUrl,
+    required String fotoBersamaOrtuUrl,
+  }) async {
+    final user = currentUser;
+    if (user == null) throw Exception('Not logged in');
+
+    final today = DateTime.now().toIso8601String().split('T').first;
+    final currentTime = "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:00";
+
+    await _client.from('attendances').upsert({
+      'schedule_id': scheduleId,
+      'user_id': user.id,
+      'date': today,
+      'check_in': currentTime,
+      'status': 'izin',
+      'surat_ijin_url': suratIjinUrl,
+      'foto_bersama_ortu_url': fotoBersamaOrtuUrl,
+      'face_verified': false,
+    });
+  }
+
   static Future<void> checkOut(String scheduleId) async {
     final user = currentUser;
     if (user == null) throw Exception('Not logged in');
@@ -267,10 +290,57 @@ class SupabaseService {
 
     await _client.from('attendances').update({
       'check_out': currentTime,
-    }).eq('schedule_id', scheduleId)
-      .eq('user_id', user.id)
-      .eq('date', today);
+    }).eq('schedule_id', scheduleId).eq('user_id', user.id).eq('date', today);
+
+    // Auto-Alpa Logic (Only if the person checking out is a teacher)
+    try {
+      final profile = await getCurrentUserProfile();
+      if (profile?['role'] == 'teacher') {
+        // 1. Get class_id for this schedule
+        final schedule = await _client.from('schedules').select('class_id').eq('id', scheduleId).maybeSingle();
+        if (schedule != null) {
+          final classId = schedule['class_id'];
+          
+          // 2. Get all students in this class
+          final students = await _client.from('students').select('profile_id').eq('class_id', classId);
+          
+          // 3. Get existing attendance for today's schedule
+          final existingAttendances = await _client.from('attendances')
+              .select('user_id')
+              .eq('schedule_id', scheduleId)
+              .eq('date', today);
+          final existingIds = existingAttendances.map((e) => e['user_id']).toSet();
+
+          // 4. Mark un-attended students as Alpa
+          for (var s in students) {
+            final studentId = s['profile_id'];
+            if (!existingIds.contains(studentId)) {
+              await _client.from('attendances').upsert({
+                'schedule_id': scheduleId,
+                'user_id': studentId,
+                'date': today,
+                'status': 'alpa',
+                'face_verified': false,
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore errors in background Alpa logic to not fail the checkout
+      debugPrint('Auto-alpa error: $e');
+    }
   }
+
+  static Future<void> updateAttendanceStatus({
+    required String attendanceId,
+    required String status,
+  }) async {
+    await _client.from('attendances').update({
+      'status': status,
+    }).eq('id', attendanceId);
+  }
+
 
   // ============================================================
   // Attendance Location (GPS) Methods
@@ -338,6 +408,17 @@ class SupabaseService {
   // Fetch Methods for Dashboard
   // ============================================================
 
+  static Stream<List<Map<String, dynamic>>> getMyAttendancesStream() {
+    final user = currentUser;
+    if (user == null) return Stream.value([]);
+
+    return _client
+        .from('attendances')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', user.id)
+        .asyncMap((_) => getMyAttendances());
+  }
+
   static Future<List<Map<String, dynamic>>> getMyAttendances() async {
     final user = currentUser;
     if (user == null) return [];
@@ -349,6 +430,71 @@ class SupabaseService {
     ''').eq('user_id', user.id).order('date', ascending: false);
 
     return List<Map<String, dynamic>>.from(response);
+  }
+
+  static Stream<Map<String, int>> getTeacherDashboardStatsStream() {
+    final user = currentUser;
+    if (user == null) return Stream.value({'total_siswa': 0, 'hadir_hari_ini': 0, 'tugas_aktif': 0});
+
+    // Listen to attendances and tasks (we'll just listen to attendances for simplicity, or we can yield a future first)
+    return _client.from('attendances').stream(primaryKey: ['id']).asyncMap((_) async {
+      return await getTeacherDashboardStats();
+    });
+  }
+
+  static Future<Map<String, int>> getTeacherDashboardStats() async {
+    final user = currentUser;
+    if (user == null) return {'total_siswa': 0, 'hadir_hari_ini': 0, 'tugas_aktif': 0};
+
+    int totalSiswa = 0;
+    int hadirHariIni = 0;
+    int tugasAktif = 0;
+
+    try {
+      // Get teacher id
+      final teacher = await getTeacherProfile();
+      if (teacher != null) {
+        final teacherId = teacher['id'];
+        
+        // Total Siswa (count all students for simplicity, or students in their wali kelas)
+        // Let's just count all students for now
+        final studentsRes = await _client.from('students').select('id');
+        totalSiswa = studentsRes.length;
+
+        // Hadir hari ini (where teacher teaches the schedule)
+        final today = DateTime.now().toIso8601String().split('T').first;
+        final schedulesRes = await _client.from('schedules').select('id').eq('teacher_id', teacherId);
+        final scheduleIds = schedulesRes.map((e) => e['id']).toList();
+
+        if (scheduleIds.isNotEmpty) {
+          final attendancesRes = await _client.from('attendances')
+              .select('id')
+              .eq('date', today)
+              .inFilter('schedule_id', scheduleIds)
+              .eq('status', 'hadir');
+          hadirHariIni = attendancesRes.length;
+
+          // Tugas aktif
+          final tasksRes = await _client.from('tasks')
+              .select('id, deadline')
+              .inFilter('schedule_id', scheduleIds);
+          
+          final now = DateTime.now();
+          tugasAktif = tasksRes.where((t) {
+            final dl = DateTime.tryParse(t['deadline'] ?? '');
+            return dl != null && dl.isAfter(now);
+          }).length;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    return {
+      'total_siswa': totalSiswa,
+      'hadir_hari_ini': hadirHariIni,
+      'tugas_aktif': tugasAktif,
+    };
   }
 
   static Future<List<Map<String, dynamic>>> getScheduleAttendances(String scheduleId) async {
@@ -413,12 +559,14 @@ class SupabaseService {
     required String title,
     String? description,
     required DateTime deadline,
+    String? fileUrl,
   }) async {
     await _client.from('tasks').insert({
       'schedule_id': scheduleId,
       'title': title,
       'description': description,
       'deadline': deadline.toIso8601String(),
+      'file_url': fileUrl,
     });
   }
 
