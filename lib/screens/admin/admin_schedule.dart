@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../models/mock_data.dart';
-import '../../widgets/app_bottom_nav.dart';
+import '../../services/supabase_service.dart';
 
 class AdminScheduleScreen extends StatefulWidget {
   const AdminScheduleScreen({super.key});
@@ -11,164 +10,110 @@ class AdminScheduleScreen extends StatefulWidget {
 }
 
 class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
-  final int _currentNavIndex = 2; // Jadwal tab for Admin is index 2
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _schedules = [];
 
-  void _onNavTap(int index) {
-    if (index == _currentNavIndex) return;
-    switch (index) {
-      case 0:
-        Navigator.pushReplacementNamed(context, '/admin-dashboard');
-        break;
-      case 1:
-        Navigator.pushReplacementNamed(context, '/admin-users');
-        break;
-      case 3:
-        _showProfileSheet();
-        break;
+  @override
+  void initState() {
+    super.initState();
+    _fetchSchedules();
+  }
+
+  Future<void> _fetchSchedules() async {
+    setState(() => _isLoading = true);
+    try {
+      final data = await SupabaseService.getSchedulesAdmin();
+      if (mounted) {
+        setState(() {
+          _schedules = data;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memuat jadwal: $e')));
+      }
     }
   }
 
-  void _showProfileSheet() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            CircleAvatar(
-              radius: 36,
-              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.primaryBlue, size: 36),
-            ),
-            const SizedBox(height: 12),
-            const Text('Super Admin', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('admin@sekolah.com', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  Navigator.pushReplacementNamed(context, '/login');
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Keluar'),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.error)),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
+  Future<void> _deleteSchedule(String id) async {
+    try {
+      await SupabaseService.deleteSchedule(id);
+      _fetchSchedules();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Jadwal berhasil dihapus')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final schedules = MockData.schedules;
-
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Manajemen Jadwal'),
-        automaticallyImplyLeading: false,
+        title: const Text('Jadwal Mata Pelajaran', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: schedules.length,
-        itemBuilder: (context, index) {
-          final schedule = schedules[index];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 16),
-            clipBehavior: Clip.antiAlias,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: AppColors.cardBorder, width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        schedule.mapelName,
-                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _schedules.isEmpty
+              ? const Center(child: Text('Belum ada data jadwal', style: TextStyle(fontFamily: 'Poppins', color: Colors.grey)))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: _schedules.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final schedule = _schedules[index];
+                    final className = schedule['classes']?['name'] ?? '-';
+                    final teacherName = schedule['profiles']?['full_name'] ?? '-';
+                    
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          schedule.className,
-                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryBlue),
-                        ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                            child: const Icon(Icons.schedule_rounded, color: Color(0xFF10B981)),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${schedule['mapel_name']} ($className)', style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                const SizedBox(height: 4),
+                                Text('Guru: $teacherName', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade700, fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 2),
+                                Text('${schedule['day']} • ${schedule['start_time'].toString().substring(0,5)} - ${schedule['end_time'].toString().substring(0,5)} • Ruang: ${schedule['room']}', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey.shade600)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+                            onPressed: () => _deleteSchedule(schedule['id']),
+                            tooltip: 'Hapus Jadwal',
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoRow(Icons.calendar_today_rounded, '${schedule.day}, ${schedule.timeRange}'),
-                  const SizedBox(height: 6),
-                  _buildInfoRow(Icons.person_rounded, schedule.teacherName),
-                  const SizedBox(height: 6),
-                  _buildInfoRow(Icons.room_rounded, schedule.room),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.edit_rounded, size: 18),
-                        label: const Text('Edit'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.delete_rounded, size: 18),
-                        label: const Text('Hapus'),
-                        style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                    );
+                  },
+                ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        child: const Icon(Icons.add_rounded),
+        onPressed: () {
+          Navigator.pushNamed(context, '/admin-schedule-form').then((_) => _fetchSchedules());
+        },
+        backgroundColor: AppColors.primaryBlue,
+        child: const Icon(Icons.add_rounded, color: Colors.white),
       ),
-      bottomNavigationBar: AppBottomNav(
-        currentIndex: _currentNavIndex,
-        role: 'admin',
-        onTap: _onNavTap,
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.grey.shade500),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade700),
-          ),
-        ),
-      ],
     );
   }
 }

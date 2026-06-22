@@ -15,6 +15,7 @@ class StudentDashboard extends StatefulWidget {
 
 class _StudentDashboardState extends State<StudentDashboard> {
   final int _currentNavIndex = 0;
+  Map<String, dynamic>? _userProfile;
 
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
@@ -29,6 +30,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
   }
 
   void _showProfileSheet() {
+    final name = _userProfile?['full_name'] as String? ?? 'Siswa';
+    final nisn = _userProfile?['identity_number'] as String? ?? '-';
+    final className = _userProfile?['class_name'] as String? ?? '-';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'S';
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -51,19 +57,21 @@ class _StudentDashboardState extends State<StudentDashboard> {
             CircleAvatar(
               radius: 36,
               backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: const Text('A', style: TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
+              child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
             ),
             const SizedBox(height: 12),
-            const Text('Andi Pratama', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
+            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text('NISN: 0051234567 • 12 IPA 1', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
+            Text('NISN: $nisn • $className', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () {
                   Navigator.of(ctx).pop();
-                  Navigator.pushReplacementNamed(context, '/login');
+                  SupabaseService.signOut().then((_) {
+                    if (mounted) Navigator.pushReplacementNamed(context, '/login');
+                  });
                 },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('Keluar'),
@@ -149,10 +157,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
                     Navigator.pushNamed(context, '/student-schedule');
                   }),
                   const SizedBox(width: 10),
-                  _buildMenuCard('Pengumuman', Icons.campaign_rounded, const Color(0xFFF59E0B), () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: const Text('Pengumuman belum tersedia'), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    );
+                  _buildMenuCard('Daftar Wajah', Icons.face_retouching_natural_rounded, AppColors.success, () {
+                    Navigator.pushNamed(context, '/face-enrollment');
                   }),
                 ],
               ),
@@ -229,6 +235,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   Future<Map<String, dynamic>> _fetchDashboardData() async {
     final profile = await SupabaseService.getCurrentUserProfile();
+    if (mounted) {
+      _userProfile = profile;
+    }
     final attendances = await SupabaseService.getMyAttendances();
     return {
       'profile': profile,

@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Aplikasi membutuhkan akses kamera untuk absensi wajah</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Aplikasi membutuhkan mikrofon untuk kamera video</string>
 </dict>
 </plist>

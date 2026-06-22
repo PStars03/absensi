@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../models/mock_data.dart';
+import '../../services/supabase_service.dart';
+import 'dart:math';
 import '../../widgets/app_bottom_nav.dart';
 
 class StudentScheduleScreen extends StatefulWidget {
@@ -12,6 +13,41 @@ class StudentScheduleScreen extends StatefulWidget {
 
 class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   final int _currentNavIndex = 1; // Jadwal tab
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _schedules = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSchedules();
+  }
+
+  Future<void> _fetchSchedules() async {
+    setState(() => _isLoading = true);
+    try {
+      final allSchedules = await SupabaseService.getSchedules();
+      final profile = await SupabaseService.getCurrentUserProfile();
+      
+      // Filter by current student class
+      if (profile != null) {
+        final classId = profile['class_id'];
+        if (classId != null) {
+          _schedules = allSchedules.where((s) => s['class_id'] == classId).toList();
+        } else {
+          // fallback if no class_id
+          _schedules = allSchedules;
+        }
+      } else {
+        _schedules = allSchedules;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memuat jadwal: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
@@ -67,18 +103,28 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final schedules = MockData.schedules;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Jadwal Pelajaran'),
         automaticallyImplyLeading: false, // hidden back button for bottom nav
       ),
-      body: ListView.builder(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _schedules.isEmpty
+              ? const Center(child: Text('Tidak ada jadwal pelajaran.', style: TextStyle(fontFamily: 'Poppins')))
+              : ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: schedules.length,
+        itemCount: _schedules.length,
         itemBuilder: (context, index) {
-          final schedule = schedules[index];
+          final schedule = _schedules[index];
+          
+          final mapelName = schedule['subjects']?['name'] ?? schedule['mapel_name'] ?? 'Mata Pelajaran';
+          final className = schedule['classes']?['name'] ?? schedule['class_name'] ?? 'Kelas';
+          final teacherName = schedule['teachers']?['profiles']?['full_name'] ?? 'Guru';
+          final dayStr = schedule['day'] ?? '-';
+          final startStr = schedule['start_time'] ?? '';
+          final endStr = schedule['end_time'] ?? '';
+          final roomStr = schedule['room'] ?? '-';
           // Toggle color between red and green variants for header
           final isEven = index % 2 == 0;
           final headerColor = isEven ? AppColors.cardHeaderRed : AppColors.cardHeaderGreen;
@@ -99,7 +145,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        schedule.mapelName,
+                        mapelName,
                         style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                       ),
                       Container(
@@ -109,7 +155,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          schedule.className,
+                          className,
                           style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
                         ),
                       ),
@@ -121,11 +167,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      _buildInfoRow(Icons.calendar_today_rounded, '${schedule.day}, ${schedule.timeRange}'),
+                      _buildInfoRow(Icons.calendar_today_rounded, '$dayStr, ${startStr.substring(0, min(startStr.length, 5))} - ${endStr.substring(0, min(endStr.length, 5))}'),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.person_rounded, schedule.teacherName),
+                      _buildInfoRow(Icons.person_rounded, teacherName),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.room_rounded, schedule.room),
+                      _buildInfoRow(Icons.room_rounded, roomStr),
                     ],
                   ),
                 ),
@@ -139,7 +185,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                       Navigator.pushNamed(
                         context, 
                         '/mapel-dashboard', 
-                        arguments: {'scheduleId': schedule.id, 'role': 'student'},
+                        arguments: {'scheduleId': schedule['id'], 'role': 'student'},
                       );
                     },
                     icon: const Icon(Icons.login_rounded, size: 20),

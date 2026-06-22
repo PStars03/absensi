@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gradient_button.dart';
 import '../services/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Halaman Login EduPresence
 class LoginScreen extends StatefulWidget {
@@ -77,6 +78,16 @@ class _LoginScreenState extends State<LoginScreen>
       }
 
       final role = profile['role'] as String?;
+      
+      if (role != 'admin') {
+        final hasFace = await SupabaseService.hasFaceEnrolled();
+        if (!hasFace) {
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(context, '/face-enrollment');
+          return;
+        }
+      }
+
       String route;
       if (role == 'admin') {
         route = '/admin-dashboard';
@@ -85,12 +96,20 @@ class _LoginScreenState extends State<LoginScreen>
       } else {
         route = '/student-dashboard';
       }
-
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, route);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      if (e.statusCode == '400' || e.message.toLowerCase().contains('invalid login credentials')) {
+        _showError('Email atau kata sandi salah. Silakan coba lagi.');
+      } else {
+        _showError('Gagal masuk: ${e.message}');
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      _showError('Gagal masuk: ${e.toString()}');
+      _showError('Terjadi kesalahan: ${e.toString()}');
     }
   }
 
@@ -204,6 +223,22 @@ class _LoginScreenState extends State<LoginScreen>
                           return null;
                         },
                       ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: GestureDetector(
+                          onTap: _showForgotPasswordModal,
+                          child: const Text(
+                            'Lupa Password?',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primaryBlue,
+                            ),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 28),
 
                       // Login button
@@ -250,6 +285,63 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showForgotPasswordModal() {
+    final emailCtrl = TextEditingController();
+    bool isSending = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (modalContext, setStateModal) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24, right: 24, top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 20),
+                  const Text('Reset Password', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  const Text('Masukkan email Anda untuk menerima tautan reset password.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  const SizedBox(height: 20),
+                  TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined))),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: isSending ? null : () async {
+                        if (emailCtrl.text.isEmpty || !emailCtrl.text.contains('@')) return;
+                        setStateModal(() => isSending = true);
+                        try {
+                          await SupabaseService.resetPassword(emailCtrl.text.trim());
+                          if (!mounted) return;
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tautan reset password telah dikirim ke email Anda')));
+                        } catch (e) {
+                          setStateModal(() => isSending = false);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengirim email: $e')));
+                        }
+                      },
+                      child: isSending ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Kirim Tautan'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

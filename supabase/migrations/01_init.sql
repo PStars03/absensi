@@ -63,6 +63,9 @@ CREATE POLICY "Users can view their own attendances and teachers/admins can view
   auth.uid() = user_id OR 
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'teacher'))
 );
+CREATE POLICY "Students can view teacher attendance" ON public.attendances FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = attendances.user_id AND role = 'teacher')
+);
 CREATE POLICY "Users can insert their own attendance" ON public.attendances FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own attendance (check-out)" ON public.attendances FOR UPDATE USING (auth.uid() = user_id);
 

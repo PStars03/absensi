@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gradient_button.dart';
-import '../models/mock_data.dart';
 import '../services/supabase_service.dart';
 
 /// Halaman Registrasi Siswa EduPresence
@@ -26,6 +25,9 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _obscureConfirm = true;
   bool _isLoading = false;
 
+  List<Map<String, dynamic>> _classOptions = [];
+  bool _loadingClasses = true;
+
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
@@ -40,6 +42,23 @@ class _RegisterScreenState extends State<RegisterScreen>
       CurvedAnimation(parent: _animController, curve: Curves.easeOut),
     );
     _animController.forward();
+    _loadClasses();
+  }
+
+  Future<void> _loadClasses() async {
+    try {
+      final classes = await SupabaseService.getClasses();
+      if (mounted) {
+        setState(() {
+          _classOptions = classes;
+          _loadingClasses = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingClasses = false);
+      }
+    }
   }
 
   @override
@@ -106,7 +125,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'Akun siswa berhasil dibuat.\nSilakan login untuk melanjutkan.',
+                'Akun siswa berhasil dibuat.\nLanjutkan untuk mendaftarkan wajah Anda.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'Poppins',
@@ -120,9 +139,9 @@ class _RegisterScreenState extends State<RegisterScreen>
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.of(ctx).pop();
-                    Navigator.of(context).pop(); // back to login
+                    Navigator.of(context).pushReplacementNamed('/face-enrollment');
                   },
-                  child: const Text('Login Sekarang'),
+                  child: const Text('Daftarkan Wajah'),
                 ),
               ),
             ],
@@ -219,21 +238,26 @@ class _RegisterScreenState extends State<RegisterScreen>
                   const SizedBox(height: 16),
 
                   // Kelas Dropdown
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedClass,
-                    decoration: const InputDecoration(
-                      labelText: 'Kelas',
-                      prefixIcon: Icon(Icons.class_outlined),
-                    ),
-                    items: MockData.classOptions
-                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                        .toList(),
-                    onChanged: (v) => setState(() => _selectedClass = v),
-                    validator: (v) {
-                      if (v == null) return 'Pilih kelas';
-                      return null;
-                    },
-                  ),
+                  _loadingClasses
+                    ? const Center(child: CircularProgressIndicator())
+                    : DropdownButtonFormField<String>(
+                        initialValue: _selectedClass,
+                        decoration: const InputDecoration(
+                          labelText: 'Kelas',
+                          prefixIcon: Icon(Icons.class_outlined),
+                        ),
+                        items: _classOptions
+                            .map((c) => DropdownMenuItem(
+                                  value: c['name'] as String,
+                                  child: Text(c['name'] as String),
+                                ))
+                            .toList(),
+                        onChanged: (v) => setState(() => _selectedClass = v),
+                        validator: (v) {
+                          if (v == null) return 'Pilih kelas';
+                          return null;
+                        },
+                      ),
                   const SizedBox(height: 16),
 
                   // Email

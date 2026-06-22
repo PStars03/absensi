@@ -3,6 +3,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/app_bottom_nav.dart';
 
+import '../../services/supabase_service.dart';
+
 /// Dashboard Super Admin
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -13,6 +15,49 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   final int _currentNavIndex = 0;
+  
+  int _totalTeachers = 0;
+  int _totalStudents = 0;
+  int _totalClasses = 0;
+  int _attendancesToday = 0;
+  bool _isLoading = true;
+  Map<String, dynamic>? _userProfile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      final client = SupabaseService.client;
+      
+      final teachers = await client.from('profiles').select('id').eq('role', 'teacher');
+      final students = await client.from('profiles').select('id').eq('role', 'student');
+      final classes = await client.from('classes').select('id');
+      
+      final today = DateTime.now().toIso8601String().split('T').first;
+      final attendances = await client.from('attendances').select('id').eq('date', today);
+
+      final profile = await SupabaseService.getCurrentUserProfile();
+
+      if (mounted) {
+        setState(() {
+          _totalTeachers = teachers.length;
+          _totalStudents = students.length;
+          _totalClasses = classes.length;
+          _attendancesToday = attendances.length;
+          _userProfile = profile;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
@@ -30,6 +75,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   void _showProfileSheet() {
+    final name = _userProfile?['full_name'] as String? ?? 'Super Admin';
+    final email = SupabaseService.currentUser?.email ?? 'admin@sekolah.com';
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -46,16 +94,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
               child: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.primaryBlue, size: 36),
             ),
             const SizedBox(height: 12),
-            const Text('Super Admin', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
+            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text('admin@sekolah.com', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
+            Text(email, style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () {
                   Navigator.of(ctx).pop();
-                  Navigator.pushReplacementNamed(context, '/login');
+                  SupabaseService.signOut().then((_) {
+                    if (mounted) Navigator.pushReplacementNamed(context, '/login');
+                  });
                 },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('Keluar'),
@@ -73,7 +123,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: _isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -95,13 +147,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Panel Admin', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
-                        const Text('Super Admin', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        Text(_userProfile?['full_name'] as String? ?? 'Super Admin', style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                       ],
                     ),
                   ),
                   IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.settings_outlined),
+                    onPressed: _loadStats,
+                    icon: const Icon(Icons.refresh_rounded),
                     style: IconButton.styleFrom(backgroundColor: AppColors.background),
                   ),
                 ],
@@ -110,18 +162,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
               // Stats
               Row(
-                children: const [
-                  Expanded(child: StatCard(icon: Icons.school_rounded, value: '8', label: 'Total Guru', color: AppColors.primaryBlue)),
-                  SizedBox(width: 10),
-                  Expanded(child: StatCard(icon: Icons.people_rounded, value: '145', label: 'Total Siswa', color: Color(0xFF6366F1))),
+                children: [
+                  Expanded(child: StatCard(icon: Icons.school_rounded, value: '$_totalTeachers', label: 'Total Guru', color: AppColors.primaryBlue)),
+                  const SizedBox(width: 10),
+                  Expanded(child: StatCard(icon: Icons.people_rounded, value: '$_totalStudents', label: 'Total Siswa', color: const Color(0xFF6366F1))),
                 ],
               ),
               const SizedBox(height: 10),
               Row(
-                children: const [
-                  Expanded(child: StatCard(icon: Icons.check_circle_rounded, value: '92%', label: 'Kehadiran', color: AppColors.success)),
-                  SizedBox(width: 10),
-                  Expanded(child: StatCard(icon: Icons.class_rounded, value: '12', label: 'Kelas', color: Color(0xFFF59E0B))),
+                children: [
+                  Expanded(child: StatCard(icon: Icons.check_circle_rounded, value: '$_attendancesToday', label: 'Absen Hari Ini', color: AppColors.success)),
+                  const SizedBox(width: 10),
+                  Expanded(child: StatCard(icon: Icons.class_rounded, value: '$_totalClasses', label: 'Kelas', color: const Color(0xFFF59E0B))),
                 ],
               ),
               const SizedBox(height: 24),
@@ -142,7 +194,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 title: 'Laporan Kehadiran',
                 subtitle: 'Lihat rekap absensi semua kelas',
                 color: const Color(0xFF10B981),
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/admin-reports'),
               ),
               const SizedBox(height: 10),
               _buildActionCard(
@@ -150,7 +202,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 title: 'Data Kelas',
                 subtitle: 'Kelola kelas dan pemetaan siswa',
                 color: const Color(0xFF6366F1),
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/admin-classes'),
               ),
               const SizedBox(height: 10),
               _buildActionCard(
@@ -159,6 +211,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 subtitle: 'Kelola jadwal dan plot guru',
                 color: const Color(0xFFEC4899),
                 onTap: () => Navigator.pushNamed(context, '/admin-schedule'),
+              ),
+              const SizedBox(height: 10),
+              _buildActionCard(
+                icon: Icons.location_on_rounded,
+                title: 'Pengaturan GPS',
+                subtitle: 'Atur lokasi dan radius absensi',
+                color: const Color(0xFFF59E0B),
+                onTap: () => Navigator.pushNamed(context, '/admin-gps'),
               ),
               const SizedBox(height: 24),
 

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../models/mock_data.dart';
 import '../../widgets/stat_card.dart';
-import '../../widgets/attendance_tile.dart';
 import '../../widgets/app_bottom_nav.dart';
+import '../../services/supabase_service.dart';
 
 /// Dashboard Guru
 class TeacherDashboard extends StatefulWidget {
@@ -15,6 +14,24 @@ class TeacherDashboard extends StatefulWidget {
 
 class _TeacherDashboardState extends State<TeacherDashboard> {
   final int _currentNavIndex = 0;
+  Map<String, dynamic>? _userProfile;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    final profile = await SupabaseService.getCurrentUserProfile();
+    if (mounted) {
+      setState(() {
+        _userProfile = profile;
+        _isLoading = false;
+      });
+    }
+  }
 
   void _onNavTap(int index) {
     if (index == _currentNavIndex) return;
@@ -29,6 +46,10 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   }
 
   void _showProfileSheet() {
+    final name = _userProfile?['full_name'] as String? ?? 'Guru';
+    final nip = _userProfile?['identity_number'] as String? ?? '-';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'G';
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -44,19 +65,21 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             CircleAvatar(
               radius: 36,
               backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: const Text('A', style: TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
+              child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
             ),
             const SizedBox(height: 12),
-            const Text('Pak Ahmad Fauzi', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
+            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text('NIP: 198501012010011001', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
+            Text('NIP: $nip', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () {
                   Navigator.of(ctx).pop();
-                  Navigator.pushReplacementNamed(context, '/login');
+                  SupabaseService.signOut().then((_) {
+                    if (mounted) Navigator.pushReplacementNamed(context, '/login');
+                  });
                 },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('Keluar'),
@@ -72,9 +95,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final todayAttendances = MockData.attendances
-        .where((a) => a.date == '11 Jun 2026')
-        .toList();
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final name = _userProfile?['full_name'] as String? ?? 'Guru';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'G';
 
     return Scaffold(
       body: SafeArea(
@@ -89,7 +115,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-                    child: const Text('A', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: AppColors.primaryBlue, fontSize: 18)),
+                    child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: AppColors.primaryBlue, fontSize: 18)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -97,7 +123,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Selamat Datang 👋', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
-                        const Text('Pak Ahmad Fauzi', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                       ],
                     ),
                   ),
@@ -134,10 +160,8 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                     Navigator.pushNamed(context, '/teacher-schedule');
                   }),
                   const SizedBox(width: 10),
-                  _buildMenuCard('Pengumuman', Icons.campaign_rounded, const Color(0xFFF59E0B), () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: const Text('Pengumuman belum tersedia'), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    );
+                  _buildMenuCard('Wali Kelas', Icons.admin_panel_settings_rounded, const Color(0xFFF59E0B), () {
+                    Navigator.pushNamed(context, '/wali-kelas');
                   }),
                 ],
               ),
@@ -154,14 +178,11 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                   ),
                 ],
               ),
-              ...todayAttendances.map((a) => AttendanceTile(
-                    name: a.userName,
-                    date: a.date,
-                    checkIn: a.checkIn,
-                    checkOut: a.checkOut,
-                    status: a.status,
-                    onEditStatus: () => _showEditStatusDialog(a),
-                  )),
+              const SizedBox(height: 12),
+              const Center(
+                child: Text('Data absensi ditampilkan per kelas melalui menu Jadwal.',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey)),
+              ),
             ],
           ),
         ),
@@ -194,46 +215,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  void _showEditStatusDialog(MockAttendance attendance) {
-    String? selectedStatus = attendance.status;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Edit Status: ${attendance.userName}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600)),
-        content: StatefulBuilder(
-          builder: (_, setDialogState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: ['hadir', 'terlambat', 'alpa', 'izin'].map((s) {
-              // ignore: deprecated_member_use
-              return RadioListTile<String>(
-                value: s,
-                // ignore: deprecated_member_use
-                groupValue: selectedStatus,
-                title: Text(s[0].toUpperCase() + s.substring(1), style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)),
-                // ignore: deprecated_member_use
-                onChanged: (v) => setDialogState(() => selectedStatus = v),
-                dense: true,
-              );
-            }).toList(),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Status ${attendance.userName} diubah ke $selectedStatus (mock)'), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-              );
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
       ),
     );
   }

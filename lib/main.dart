@@ -6,27 +6,27 @@ import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/face_scan_screen.dart';
+import 'screens/face_enrollment_screen.dart';
 // Student
 import 'screens/student/student_dashboard.dart';
-import 'screens/student/student_attendance.dart';
-import 'screens/student/student_materials.dart';
-import 'screens/student/student_tasks.dart';
-import 'screens/student/student_quiz.dart';
+import 'screens/student/student_quiz_attempt.dart';
 import 'screens/student/student_schedule.dart';
 // Teacher
 import 'screens/teacher/teacher_dashboard.dart';
-import 'screens/teacher/teacher_attendance.dart';
-import 'screens/teacher/teacher_materials.dart';
-import 'screens/teacher/teacher_tasks.dart';
-import 'screens/teacher/teacher_quiz.dart';
+import 'screens/teacher/teacher_quiz_detail.dart';
 import 'screens/teacher/teacher_schedule.dart';
-// Admin
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/admin/admin_users.dart';
+import 'screens/admin/admin_gps_settings.dart';
 import 'screens/admin/admin_schedule.dart';
+import 'screens/admin/admin_reports.dart';
+import 'screens/admin/admin_classes.dart';
+import 'screens/admin/admin_class_detail.dart';
+import 'screens/admin/admin_schedule_form.dart';
 
 // Shared
 import 'screens/shared/mapel_dashboard.dart';
+import 'screens/teacher/wali_kelas_monitoring.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +55,7 @@ class MyApp extends StatelessWidget {
           case '/register':
             return _buildRoute(const RegisterScreen(), settings);
 
-          // Face Scan
+          // Face
           case '/face-scan':
             final args =
                 settings.arguments as Map<String, dynamic>? ??
@@ -67,42 +67,47 @@ class MyApp extends StatelessWidget {
               ),
               settings,
             );
+          case '/face-enrollment':
+            return _buildRoute(const FaceEnrollmentScreen(), settings);
 
           // Student
           case '/student-dashboard':
             return _buildRoute(const StudentDashboard(), settings);
           case '/student-schedule':
             return _buildRoute(const StudentScheduleScreen(), settings);
-          case '/student-attendance':
-            return _buildRoute(const StudentAttendance(), settings);
-          case '/student-materials':
-            return _buildRoute(const StudentMaterials(), settings);
-          case '/student-tasks':
-            return _buildRoute(const StudentTasks(), settings);
-          case '/student-quiz':
-            return _buildRoute(const StudentQuiz(), settings);
+          case '/student-quiz-attempt':
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return _buildRoute(StudentQuizAttemptScreen(quiz: args), settings);
 
           // Teacher
           case '/teacher-dashboard':
             return _buildRoute(const TeacherDashboard(), settings);
           case '/teacher-schedule':
             return _buildRoute(const TeacherScheduleScreen(), settings);
-          case '/teacher-attendance':
-            return _buildRoute(const TeacherAttendance(), settings);
-          case '/teacher-materials':
-            return _buildRoute(const TeacherMaterials(), settings);
-          case '/teacher-tasks':
-            return _buildRoute(const TeacherTasks(), settings);
-          case '/teacher-quiz':
-            return _buildRoute(const TeacherQuiz(), settings);
+          case '/teacher-quiz-detail':
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return _buildRoute(TeacherQuizDetailScreen(quiz: args), settings);
+          case '/wali-kelas':
+            return _buildRoute(const WaliKelasMonitoringScreen(), settings);
 
           // Admin
           case '/admin-dashboard':
             return _buildRoute(const AdminDashboard(), settings);
-          case '/admin-schedule':
-            return _buildRoute(const AdminScheduleScreen(), settings);
           case '/admin-users':
             return _buildRoute(const AdminUsers(), settings);
+          case '/admin-gps':
+            return _buildRoute(const AdminGpsSettingsScreen(), settings);
+          case '/admin-schedule':
+            return _buildRoute(const AdminScheduleScreen(), settings);
+          case '/admin-reports':
+            return _buildRoute(const AdminReportsScreen(), settings);
+          case '/admin-classes':
+            return _buildRoute(const AdminClassesScreen(), settings);
+          case '/admin-class-detail':
+            final args = settings.arguments as Map<String, dynamic>;
+            return _buildRoute(AdminClassDetailScreen(classData: args), settings);
+          case '/admin-schedule-form':
+            return _buildRoute(const AdminScheduleFormScreen(), settings);
 
           // Shared
           case '/mapel-dashboard':
