@@ -141,23 +141,27 @@ class _LoginScreenState extends State<LoginScreen>
                     children: [
                       // Logo placeholder
                       Container(
-                        width: 88,
-                        height: 88,
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          gradient: AppColors.heroGradient,
-                          borderRadius: BorderRadius.circular(22),
+                          color: Colors.white,
+                          shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primaryBlue.withValues(alpha: 0.3),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
-                            ),
+                              color: AppColors.primaryBlue.withValues(alpha: 0.2),
+                              blurRadius: 30,
+                              offset: const Offset(0, 10),
+                            )
                           ],
                         ),
-                        child: const Icon(
-                          Icons.school_rounded,
-                          color: Colors.white,
-                          size: 44,
+                        child: Image.asset(
+                          'assets/images/logo.jpg',
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            // Fallback if image not found
+                            return const Icon(Icons.fingerprint_rounded, size: 80, color: AppColors.primaryBlue);
+                          },
                         ),
                       ),
                       const SizedBox(height: 20),

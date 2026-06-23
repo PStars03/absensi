@@ -15,6 +15,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   final int _currentNavIndex = 1; // Jadwal tab
   bool _isLoading = true;
   List<Map<String, dynamic>> _schedules = [];
+  Map<String, dynamic>? _userProfile;
 
   @override
   void initState() {
@@ -28,6 +29,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       final allSchedules = await SupabaseService.getSchedules();
       final profile = await SupabaseService.getCurrentUserProfile();
       
+      if (mounted) {
+        setState(() => _userProfile = profile);
+      }
+
       // Filter by current student class
       if (profile != null) {
         final classId = profile['class_id'];
@@ -62,6 +67,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   }
 
   void _showProfileSheet() {
+    final name = _userProfile?['full_name'] as String? ?? 'Siswa';
+    final identityNumber = _userProfile?['identity_number'] as String? ?? '-';
+    final className = _userProfile?['classes']?['name'] as String? ?? '-';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'S';
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -75,19 +85,21 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             CircleAvatar(
               radius: 36,
               backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: const Text('A', style: TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
+              child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
             ),
             const SizedBox(height: 12),
-            const Text('Andi Pratama', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
+            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text('NISN: 0051234567 • 12 IPA 1', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
+            Text('NISN: $identityNumber • $className', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () {
                   Navigator.of(ctx).pop();
-                  Navigator.pushReplacementNamed(context, '/login');
+                  SupabaseService.signOut().then((_) {
+                    if (mounted) Navigator.pushReplacementNamed(context, '/login');
+                  });
                 },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('Keluar'),
@@ -125,9 +137,12 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           final startStr = schedule['start_time'] ?? '';
           final endStr = schedule['end_time'] ?? '';
           final roomStr = schedule['room'] ?? '-';
-          // Toggle color between red and green variants for header
-          final isEven = index % 2 == 0;
-          final headerColor = isEven ? AppColors.cardHeaderRed : AppColors.cardHeaderGreen;
+          final todayInt = DateTime.now().weekday;
+          final days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+          final todayStr = todayInt >= 1 && todayInt <= 7 ? days[todayInt - 1] : '';
+          
+          final isToday = dayStr.trim().toLowerCase() == todayStr.toLowerCase();
+          final headerColor = isToday ? AppColors.success : AppColors.error;
 
           return Card(
             margin: const EdgeInsets.only(bottom: 16),

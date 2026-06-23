@@ -47,7 +47,9 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       
       // Fetch tab data
       final results = await Future.wait([
-        SupabaseService.getScheduleAttendances(widget.scheduleId),
+        widget.role == 'teacher'
+            ? SupabaseService.getScheduleAttendances(widget.scheduleId)
+            : SupabaseService.getMeetingsWithAttendances(widget.scheduleId),
         SupabaseService.getMaterials(widget.scheduleId),
         SupabaseService.getTasks(widget.scheduleId),
       ]);
@@ -71,6 +73,38 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
     }
   }
 
+  bool _isTimeAllowed(bool isCheckOut) {
+    if (_schedule == null || _schedule!.isEmpty) return false;
+    final dayStr = _schedule!['day'] ?? '';
+    final startStr = _schedule!['start_time'] ?? '';
+    final endStr = _schedule!['end_time'] ?? '';
+    
+    final todayInt = DateTime.now().weekday;
+    final days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+    final todayStr = todayInt >= 1 && todayInt <= 7 ? days[todayInt - 1] : '';
+    
+    if (dayStr.toLowerCase() != todayStr.toLowerCase()) return false;
+    
+    try {
+      final now = TimeOfDay.now();
+      final nowMinutes = now.hour * 60 + now.minute;
+      
+      final startParts = startStr.split(':');
+      final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+      
+      final endParts = endStr.split(':');
+      final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+      
+      if (isCheckOut) {
+        return nowMinutes >= startMinutes;
+      } else {
+        return nowMinutes >= startMinutes && nowMinutes <= endMinutes;
+      }
+    } catch (e) {
+      return false; 
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -86,7 +120,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
             SliverAppBar(
-              expandedHeight: 230,
+              expandedHeight: widget.role == 'student' ? 280 : 230,
               pinned: true,
               flexibleSpace: FlexibleSpaceBar(
                 background: Container(
@@ -112,6 +146,10 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                           Expanded(
                             child: ElevatedButton.icon(
                               onPressed: () {
+                                if (!_isTimeAllowed(false)) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Belum waktunya jadwal kelas ini.')));
+                                  return;
+                                }
                                 Navigator.pushNamed(context, '/face-scan', arguments: {
                                   'type': 'masuk',
                                   'scheduleId': widget.scheduleId,
@@ -129,11 +167,19 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: () {
-                                Navigator.pushNamed(context, '/face-scan', arguments: {
+                              onPressed: () async {
+                                if (!_isTimeAllowed(true)) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Jadwal kelas belum dimulai.')));
+                                  return;
+                                }
+                                await Navigator.pushNamed(context, '/face-scan', arguments: {
                                   'type': 'pulang',
                                   'scheduleId': widget.scheduleId,
                                 });
+
+                                if (widget.role == 'teacher' && context.mounted) {
+                                  _showRangkumanDialog();
+                                }
                               },
                               icon: const Icon(Icons.logout_rounded),
                               label: Text(widget.role == 'teacher' ? 'Selesai' : 'Pulang'),
@@ -261,14 +307,15 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateModal) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 24, right: 24, top: 24,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          return SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 24, right: 24, top: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 20),
@@ -350,6 +397,68 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                 ),
               ],
             ),
+            ),
+          );
+        }
+      ),
+    );
+  }
+
+  void _showRangkumanDialog() {
+    final summaryCtrl = TextEditingController();
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24, right: 24, top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 20),
+                const Text('Rangkuman Pertemuan', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                const Text('Silakan isi rangkuman materi untuk pertemuan ini.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: summaryCtrl,
+                  maxLines: 4,
+                  decoration: const InputDecoration(labelText: 'Rangkuman Materi', alignLabelWithHint: true),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: isSaving ? null : () async {
+                      if (summaryCtrl.text.isEmpty) return;
+                      setStateModal(() => isSaving = true);
+                      try {
+                        await SupabaseService.addMeetingSummary(widget.scheduleId, summaryCtrl.text);
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rangkuman berhasil disimpan')));
+                        _fetchData();
+                      } catch (e) {
+                        setStateModal(() => isSaving = false);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menyimpan rangkuman: $e')));
+                      }
+                    },
+                    child: isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan'),
+                  ),
+                ),
+              ],
+            ),
           );
         }
       ),
@@ -358,9 +467,50 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
 
   Widget _buildAbsensiTab() {
     if (_attendances.isEmpty) {
-      return const Center(child: Text('Belum ada data absensi', style: TextStyle(fontFamily: 'Poppins')));
+      return Center(child: Text(widget.role == 'teacher' ? 'Belum ada data absensi' : 'Belum ada data pertemuan', style: const TextStyle(fontFamily: 'Poppins')));
     }
 
+    if (widget.role == 'student') {
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _attendances.length,
+        itemBuilder: (context, index) {
+          final m = _attendances[index];
+          final pertemuan = m['meeting_number'] ?? '-';
+          final date = m['date'] ?? '-';
+          final mapel = m['schedules']?['mapel_name'] ?? '-';
+          final summary = m['summary'] ?? 'Tidak ada rangkuman';
+          final status = m['status'] ?? 'alpa';
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Pertemuan $pertemuan', style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 16)),
+                      _buildStatusBadge(status),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text('$date • $mapel', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  const SizedBox(height: 12),
+                  const Text('Rangkuman:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  Text(summary, style: const TextStyle(fontSize: 14)),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // Teacher View (Absensi List)
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _attendances.length,
@@ -661,14 +811,15 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateModal) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 24, right: 24, top: 24,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          return SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 24, right: 24, top: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 20),
@@ -767,6 +918,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                   ),
                 ),
               ],
+            ),
             ),
           );
         }
@@ -912,14 +1064,15 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateModal) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 24, right: 24, top: 24,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          return SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 24, right: 24, top: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 20),
@@ -1013,6 +1166,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                 ],
               ],
             ),
+            ),
           );
         }
       ),
@@ -1026,12 +1180,12 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
   // =========================================================================
 
   Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
+    try {
+      final uri = Uri.parse(url);
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal membuka URL')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuka URL: $e')));
     }
   }
 

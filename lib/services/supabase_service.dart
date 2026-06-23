@@ -208,7 +208,7 @@ class SupabaseService {
   }
 
   static Future<List<Map<String, dynamic>>> getClasses() async {
-    final response = await _client.from('classes').select().order('name');
+    final response = await _client.from('classes').select('*, attendance_locations(name)').order('name');
     return List<Map<String, dynamic>>.from(response);
   }
 
@@ -341,6 +341,96 @@ class SupabaseService {
     }).eq('id', attendanceId);
   }
 
+
+  // ============================================================
+  // Meetings & Summary Methods
+  // ============================================================
+
+  static Future<void> addMeetingSummary(String scheduleId, String summary) async {
+    final today = DateTime.now().toIso8601String().split('T').first;
+    
+    // Check if meeting already exists for today
+    final existing = await _client.from('meetings')
+      .select('id, meeting_number')
+      .eq('schedule_id', scheduleId)
+      .eq('date', today)
+      .maybeSingle();
+
+    if (existing != null) {
+      // Update existing
+      await _client.from('meetings').update({
+        'summary': summary,
+      }).eq('id', existing['id']);
+    } else {
+      // Get the latest meeting number
+      final latest = await _client.from('meetings')
+        .select('meeting_number')
+        .eq('schedule_id', scheduleId)
+        .order('meeting_number', ascending: false)
+        .limit(1)
+        .maybeSingle();
+      
+      int nextNumber = 1;
+      if (latest != null) {
+        nextNumber = (latest['meeting_number'] as int) + 1;
+      }
+
+      await _client.from('meetings').insert({
+        'schedule_id': scheduleId,
+        'meeting_number': nextNumber,
+        'date': today,
+        'summary': summary,
+      });
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getMeetingsWithAttendances(String scheduleId) async {
+    final user = currentUser;
+    if (user == null) return [];
+
+    // Get all meetings for this schedule
+    final meetingsRes = await _client.from('meetings')
+      .select('*, schedules(mapel_name)')
+      .eq('schedule_id', scheduleId)
+      .order('meeting_number', ascending: false);
+
+    final meetings = List<Map<String, dynamic>>.from(meetingsRes);
+
+    // Get student's attendances for this schedule
+    final attendancesRes = await _client.from('attendances')
+      .select('date, status')
+      .eq('schedule_id', scheduleId)
+      .eq('user_id', user.id);
+
+    final attendances = List<Map<String, dynamic>>.from(attendancesRes);
+    final attendanceMap = {for (var a in attendances) a['date'] as String: a['status'] as String};
+    final meetingMap = {for (var m in meetings) m['date'] as String: m};
+
+    // Combine all dates from both meetings and attendances
+    final allDates = <String>{};
+    allDates.addAll(attendanceMap.keys);
+    allDates.addAll(meetingMap.keys);
+
+    final combined = <Map<String, dynamic>>[];
+
+    for (var date in allDates) {
+      final meeting = meetingMap[date] ?? {
+        'date': date,
+        'meeting_number': '-',
+        'summary': 'Belum ada rangkuman (Guru belum mengisi)',
+      };
+      
+      combined.add({
+        ...meeting,
+        'status': attendanceMap[date] ?? 'alpa',
+      });
+    }
+
+    // Sort by date descending
+    combined.sort((a, b) => (b['date'] as String).compareTo(a['date'] as String));
+
+    return combined;
+  }
 
   // ============================================================
   // Attendance Location (GPS) Methods
@@ -843,11 +933,13 @@ class SupabaseService {
     required String name,
     required String level,
     required String academicYear,
+    required String locationId,
   }) async {
     await _client.from('classes').insert({
       'name': name,
       'level': level,
       'academic_year': academicYear,
+      'location_id': locationId,
     });
   }
 

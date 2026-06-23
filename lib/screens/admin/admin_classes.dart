@@ -12,6 +12,7 @@ class AdminClassesScreen extends StatefulWidget {
 class _AdminClassesScreenState extends State<AdminClassesScreen> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _classes = [];
+  List<Map<String, dynamic>> _locations = [];
 
   @override
   void initState() {
@@ -23,9 +24,11 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
     setState(() => _isLoading = true);
     try {
       final data = await SupabaseService.getClasses();
+      final locations = await SupabaseService.getAttendanceLocations();
       if (mounted) {
         setState(() {
           _classes = data;
+          _locations = locations;
           _isLoading = false;
         });
       }
@@ -41,6 +44,7 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
     final nameCtrl = TextEditingController();
     final levelCtrl = TextEditingController();
     final yearCtrl = TextEditingController(text: '2025/2026');
+    String? selectedLocationId;
     bool isSaving = false;
 
     showModalBottomSheet(
@@ -71,18 +75,34 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                 controller: yearCtrl,
                 decoration: const InputDecoration(labelText: 'Tahun Ajaran'),
               ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: selectedLocationId,
+                decoration: const InputDecoration(labelText: 'Lokasi Absensi'),
+                items: _locations.map((loc) {
+                  return DropdownMenuItem<String>(
+                    value: loc['id'],
+                    child: Text(loc['name']),
+                  );
+                }).toList(),
+                onChanged: (val) => setStateModal(() => selectedLocationId = val),
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: isSaving ? null : () async {
-                    if (nameCtrl.text.isEmpty || levelCtrl.text.isEmpty || yearCtrl.text.isEmpty) return;
+                    if (nameCtrl.text.isEmpty || levelCtrl.text.isEmpty || yearCtrl.text.isEmpty || selectedLocationId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Semua form dan lokasi harus diisi!')));
+                      return;
+                    }
                     setStateModal(() => isSaving = true);
                     try {
                       await SupabaseService.createClass(
                         name: nameCtrl.text.trim(),
                         level: levelCtrl.text.trim(),
                         academicYear: yearCtrl.text.trim(),
+                        locationId: selectedLocationId!,
                       );
                       if (!context.mounted) return;
                       Navigator.pop(ctx);
@@ -148,6 +168,8 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                                   Text(cls['name'] ?? '', style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                                   const SizedBox(height: 4),
                                   Text('Tingkat: ${cls['level']} • TA: ${cls['academic_year']}', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade600)),
+                                  const SizedBox(height: 2),
+                                  Text('Lokasi: ${cls['attendance_locations']?['name'] ?? 'Belum disetel'}', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.primaryBlue)),
                                 ],
                               ),
                             ),

@@ -129,8 +129,12 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
           final endStr = schedule['end_time'] ?? '';
           final roomStr = schedule['room'] ?? '-';
 
-          final isEven = index % 2 == 0;
-          final headerColor = isEven ? AppColors.cardHeaderRed : AppColors.cardHeaderGreen;
+          final todayInt = DateTime.now().weekday;
+          final days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+          final todayStr = todayInt >= 1 && todayInt <= 7 ? days[todayInt - 1] : '';
+          
+          final isToday = dayStr.trim().toLowerCase() == todayStr.toLowerCase();
+          final headerColor = isToday ? AppColors.success : AppColors.error;
 
           return Card(
             margin: const EdgeInsets.only(bottom: 16),
