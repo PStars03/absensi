@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_theme.dart';
+import '../../services/notification_service.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/attendance_tile.dart';
 import '../../widgets/app_bottom_nav.dart';
@@ -17,11 +20,34 @@ class _StudentDashboardState extends State<StudentDashboard> {
   final int _currentNavIndex = 0;
   Map<String, dynamic>? _userProfile;
   bool _isLoadingProfile = true;
+  int _unreadNotifs = 0;
+  StreamSubscription? _notifSub;
 
   @override
   void initState() {
     super.initState();
     _fetchProfile();
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.init(context);
+    });
+    
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null) {
+      _notifSub = Supabase.instance.client.from('notifications').stream(primaryKey: ['id']).eq('user_id', userId).listen((data) {
+        if (mounted) {
+          setState(() {
+            _unreadNotifs = data.where((n) => n['is_read'] == false).length;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchProfile() async {
@@ -148,8 +174,14 @@ class _StudentDashboardState extends State<StudentDashboard> {
                               ),
                             ),
                             IconButton(
-                              onPressed: () {},
-                              icon: const Icon(Icons.notifications_outlined),
+                              onPressed: () {
+                                Navigator.pushNamed(context, '/notifications');
+                              },
+                              icon: Badge(
+                                isLabelVisible: _unreadNotifs > 0,
+                                label: Text(_unreadNotifs.toString()),
+                                child: const Icon(Icons.notifications_outlined),
+                              ),
                               style: IconButton.styleFrom(backgroundColor: AppColors.background),
                             ),
                           ],

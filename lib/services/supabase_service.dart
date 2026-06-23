@@ -44,7 +44,10 @@ class SupabaseService {
   }
 
   static Future<void> resetPassword(String email) async {
-    await _client.auth.resetPasswordForEmail(email);
+    await _client.auth.resetPasswordForEmail(
+      email,
+      redirectTo: 'io.supabase.absensi://login-callback/',
+    );
   }
 
   // ============================================================

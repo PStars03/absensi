@@ -132,7 +132,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           
           final mapelName = schedule['subjects']?['name'] ?? schedule['mapel_name'] ?? 'Mata Pelajaran';
           final className = schedule['classes']?['name'] ?? schedule['class_name'] ?? 'Kelas';
-          final teacherName = schedule['teachers']?['profiles']?['full_name'] ?? 'Guru';
+          final teacherName = schedule['profiles']?['full_name'] ?? 'Guru';
           final dayStr = schedule['day'] ?? '-';
           final startStr = schedule['start_time'] ?? '';
           final endStr = schedule['end_time'] ?? '';

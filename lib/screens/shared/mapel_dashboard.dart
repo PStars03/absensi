@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../services/supabase_service.dart';
 import 'package:intl/intl.dart';
+import '../../services/notification_service.dart';
 
 class MapelDashboardScreen extends StatefulWidget {
   final String scheduleId;
@@ -62,6 +63,23 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
           _tasks = results[2];
           _isLoading = false;
         });
+        
+        // Schedule deadline notifications for students
+        if (widget.role == 'student') {
+          for (var t in _tasks) {
+            if (t['due_date'] != null) {
+              final due = DateTime.parse(t['due_date']).toLocal();
+              // Create a unique numeric ID for the notification based on task ID string
+              final notifId = t['id'].hashCode;
+              NotificationService.scheduleDeadlineNotification(
+                notifId, 
+                '⏰ Pengingat Deadline Tugas', 
+                'Tugas "${t['title']}" akan ditutup dalam 15 menit!', 
+                due
+              );
+            }
+          }
+        }
       }
     } catch (e) {
       if (mounted) {

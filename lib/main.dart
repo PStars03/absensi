@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'theme/app_theme.dart';
@@ -7,10 +8,12 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/face_scan_screen.dart';
 import 'screens/face_enrollment_screen.dart';
+import 'screens/update_password_screen.dart';
 // Student
 import 'screens/student/student_dashboard.dart';
 import 'screens/student/student_quiz_attempt.dart';
 import 'screens/student/student_schedule.dart';
+import 'screens/student/notifications_screen.dart';
 // Teacher
 import 'screens/teacher/teacher_dashboard.dart';
 import 'screens/teacher/teacher_quiz_detail.dart';
@@ -38,13 +41,40 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late final StreamSubscription<AuthState> _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      if (event == AuthChangeEvent.passwordRecovery) {
+        navigatorKey.currentState?.pushNamed('/update-password');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'EduPresence',
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       initialRoute: '/login',
@@ -55,6 +85,8 @@ class MyApp extends StatelessWidget {
             return _buildRoute(const LoginScreen(), settings);
           case '/register':
             return _buildRoute(const RegisterScreen(), settings);
+          case '/update-password':
+            return _buildRoute(const UpdatePasswordScreen(), settings);
 
           // Face
           case '/face-scan':
@@ -79,6 +111,8 @@ class MyApp extends StatelessWidget {
           case '/student-quiz-attempt':
             final args = settings.arguments as Map<String, dynamic>? ?? {};
             return _buildRoute(StudentQuizAttemptScreen(quiz: args), settings);
+          case '/notifications':
+            return _buildRoute(const NotificationsScreen(), settings);
 
           // Teacher
           case '/teacher-dashboard':
