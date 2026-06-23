@@ -139,32 +139,32 @@ class _LoginScreenState extends State<LoginScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Logo placeholder
+                      // Logo
                       Container(
-                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primaryBlue.withValues(alpha: 0.2),
-                              blurRadius: 30,
+                              color: AppColors.primaryBlue.withValues(alpha: 0.15),
+                              blurRadius: 40,
                               offset: const Offset(0, 10),
                             )
                           ],
                         ),
-                        child: Image.asset(
-                          'assets/images/logo.jpg',
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            // Fallback if image not found
-                            return const Icon(Icons.fingerprint_rounded, size: 80, color: AppColors.primaryBlue);
-                          },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            width: 120,
+                            height: 120,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              // Fallback if image not found
+                              return const Icon(Icons.fingerprint_rounded, size: 80, color: AppColors.primaryBlue);
+                            },
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
 
                       // App name
                       const Text(

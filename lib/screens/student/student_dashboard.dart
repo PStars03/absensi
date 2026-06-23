@@ -121,6 +121,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
                 int countHadir = attendances.where((a) => a['status'] == 'hadir').length;
                 int countTerlambat = attendances.where((a) => a['status'] == 'terlambat').length;
                 int countAlpa = attendances.where((a) => a['status'] == 'alpa').length;
+                int countIzin = attendances.where((a) => a['status'] == 'izin').length;
 
                 return SafeArea(
                   child: SingleChildScrollView(
@@ -156,13 +157,23 @@ class _StudentDashboardState extends State<StudentDashboard> {
                         const SizedBox(height: 24),
 
                         // Stats
-                        Row(
+                        Column(
                           children: [
-                            Expanded(child: StatCard(icon: Icons.check_circle_rounded, value: countHadir.toString(), label: 'Hadir', color: AppColors.success)),
-                            const SizedBox(width: 10),
-                            Expanded(child: StatCard(icon: Icons.schedule_rounded, value: countTerlambat.toString(), label: 'Terlambat', color: AppColors.warning)),
-                            const SizedBox(width: 10),
-                            Expanded(child: StatCard(icon: Icons.cancel_rounded, value: countAlpa.toString(), label: 'Alpa', color: AppColors.error)),
+                            Row(
+                              children: [
+                                Expanded(child: StatCard(icon: Icons.check_circle_rounded, value: countHadir.toString(), label: 'Hadir', color: AppColors.success)),
+                                const SizedBox(width: 10),
+                                Expanded(child: StatCard(icon: Icons.schedule_rounded, value: countTerlambat.toString(), label: 'Terlambat', color: AppColors.warning)),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(child: StatCard(icon: Icons.assignment_rounded, value: countIzin.toString(), label: 'Izin/Sakit', color: AppColors.primaryBlue)),
+                                const SizedBox(width: 10),
+                                Expanded(child: StatCard(icon: Icons.cancel_rounded, value: countAlpa.toString(), label: 'Alpa', color: AppColors.error)),
+                              ],
+                            ),
                           ],
                         ),
               const SizedBox(height: 24),

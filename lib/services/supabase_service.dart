@@ -371,7 +371,7 @@ class SupabaseService {
         .maybeSingle();
       
       int nextNumber = 1;
-      if (latest != null) {
+      if (latest != null && latest['meeting_number'] != null) {
         nextNumber = (latest['meeting_number'] as int) + 1;
       }
 
@@ -381,6 +381,36 @@ class SupabaseService {
         'date': today,
         'summary': summary,
       });
+    }
+
+    // --- INSERT ALPA FOR STUDENTS WHO HAVEN'T CHECKED IN ---
+    final scheduleData = await _client.from('schedules').select('class_id').eq('id', scheduleId).maybeSingle();
+    if (scheduleData != null && scheduleData['class_id'] != null) {
+      final classId = scheduleData['class_id'];
+      
+      final studentsRes = await _client.from('students').select('profile_id').eq('class_id', classId);
+      final students = List<Map<String, dynamic>>.from(studentsRes);
+
+      final attendancesRes = await _client.from('attendances').select('user_id').eq('schedule_id', scheduleId).eq('date', today);
+      final existingUserIds = List<String>.from(attendancesRes.map((a) => a['user_id'] as String));
+
+      final alpaInserts = <Map<String, dynamic>>[];
+      for (var st in students) {
+        final profileId = st['profile_id'] as String;
+        if (!existingUserIds.contains(profileId)) {
+          alpaInserts.add({
+            'schedule_id': scheduleId,
+            'user_id': profileId,
+            'date': today,
+            'status': 'alpa',
+            'face_verified': false,
+          });
+        }
+      }
+
+      if (alpaInserts.isNotEmpty) {
+        await _client.from('attendances').insert(alpaInserts);
+      }
     }
   }
 
@@ -588,12 +618,56 @@ class SupabaseService {
   }
 
   static Future<List<Map<String, dynamic>>> getScheduleAttendances(String scheduleId) async {
+    final today = DateTime.now().toIso8601String().split('T').first;
+
+    // Fetch existing attendances for today
     final response = await _client.from('attendances').select('''
       *,
       profiles:user_id ( full_name )
-    ''').eq('schedule_id', scheduleId).order('date', ascending: false);
+    ''').eq('schedule_id', scheduleId).eq('date', today).order('created_at', ascending: false);
 
-    return List<Map<String, dynamic>>.from(response);
+    final attendances = List<Map<String, dynamic>>.from(response);
+
+    // Get class_id to find all students enrolled
+    final scheduleData = await _client.from('schedules').select('class_id').eq('id', scheduleId).maybeSingle();
+    if (scheduleData != null && scheduleData['class_id'] != null) {
+      final classId = scheduleData['class_id'];
+
+      final studentsRes = await _client.from('students').select('''
+        profile_id,
+        profiles:profile_id ( full_name )
+      ''').eq('class_id', classId);
+      
+      final students = List<Map<String, dynamic>>.from(studentsRes);
+      final attendanceMap = {for (var a in attendances) a['user_id']: a};
+
+      final combined = <Map<String, dynamic>>[];
+      for (var st in students) {
+        final profileId = st['profile_id'];
+        if (attendanceMap.containsKey(profileId)) {
+          combined.add(attendanceMap[profileId]!);
+        } else {
+          // Default alpa if no record
+          combined.add({
+            'user_id': profileId,
+            'profiles': st['profiles'],
+            'status': 'alpa',
+            'check_in': null,
+          });
+        }
+      }
+      
+      // Sort: attendees first, then alpa, or alphabetically by name
+      combined.sort((a, b) {
+        final nameA = a['profiles']?['full_name']?.toString() ?? '';
+        final nameB = b['profiles']?['full_name']?.toString() ?? '';
+        return nameA.compareTo(nameB);
+      });
+      
+      return combined;
+    }
+
+    return attendances;
   }
 
   // ============================================================
