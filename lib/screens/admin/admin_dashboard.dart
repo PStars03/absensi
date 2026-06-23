@@ -69,54 +69,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
         Navigator.pushNamed(context, '/admin-schedule');
         break;
       case 3:
-        _showProfileSheet();
+        Navigator.pushNamed(context, '/profile');
         break;
     }
-  }
-
-  void _showProfileSheet() {
-    final name = _userProfile?['full_name'] as String? ?? 'Super Admin';
-    final email = SupabaseService.currentUser?.email ?? 'admin@sekolah.com';
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            CircleAvatar(
-              radius: 36,
-              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.primaryBlue, size: 36),
-            ),
-            const SizedBox(height: 12),
-            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text(email, style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  SupabaseService.signOut().then((_) {
-                    if (mounted) Navigator.pushReplacementNamed(context, '/login');
-                  });
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Keluar'),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.error)),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
   }
 
   @override

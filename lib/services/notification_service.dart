@@ -25,19 +25,8 @@ class NotificationService {
     // Setup Realtime Listener for new notifications
     final userId = _supabase.auth.currentUser?.id;
     if (userId != null) {
-      _notificationSubscription = _supabase
-          .from('notifications')
-          .stream(primaryKey: ['id'])
-          .eq('user_id', userId)
-          .listen((data) {
-        // Find newly inserted unread notifications
-        for (var notif in data) {
-          if (notif['is_read'] == false) {
-            _showInAppNotification(notif['title'], notif['message']);
-            // Optionally, mark as read immediately or let the user do it in the UI
-          }
-        }
-      });
+      // Use a simple polling or just rely on the dashboard stream to avoid multi-stream deadlocks
+      // For now, we removed the background stream here to prevent ANR.
     }
   }
 

@@ -31,6 +31,7 @@ import 'screens/admin/admin_schedule_form.dart';
 // Shared
 import 'screens/shared/mapel_dashboard.dart';
 import 'screens/teacher/wali_kelas_monitoring.dart';
+import 'screens/shared/profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -158,6 +159,8 @@ class _MyAppState extends State<MyApp> {
               ),
               settings,
             );
+          case '/profile':
+            return _buildRoute(const ProfileScreen(), settings);
 
           default:
             return _buildRoute(const LoginScreen(), settings);

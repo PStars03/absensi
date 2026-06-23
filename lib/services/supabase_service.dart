@@ -531,15 +531,20 @@ class SupabaseService {
   // Fetch Methods for Dashboard
   // ============================================================
 
-  static Stream<List<Map<String, dynamic>>> getMyAttendancesStream() {
+  static Stream<List<Map<String, dynamic>>> getMyAttendancesStream() async* {
     final user = currentUser;
-    if (user == null) return Stream.value([]);
+    if (user == null) {
+      yield [];
+      return;
+    }
 
-    return _client
-        .from('attendances')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', user.id)
-        .asyncMap((_) => getMyAttendances());
+    // Yield initial data instantly
+    yield await getMyAttendances();
+
+    // Listen to realtime updates
+    await for (final _ in _client.from('attendances').stream(primaryKey: ['id']).eq('user_id', user.id)) {
+      yield await getMyAttendances();
+    }
   }
 
   static Future<List<Map<String, dynamic>>> getMyAttendances() async {
@@ -555,14 +560,20 @@ class SupabaseService {
     return List<Map<String, dynamic>>.from(response);
   }
 
-  static Stream<Map<String, int>> getTeacherDashboardStatsStream() {
+  static Stream<Map<String, int>> getTeacherDashboardStatsStream() async* {
     final user = currentUser;
-    if (user == null) return Stream.value({'total_siswa': 0, 'hadir_hari_ini': 0, 'tugas_aktif': 0});
+    if (user == null) {
+      yield {'total_siswa': 0, 'hadir_hari_ini': 0, 'tugas_aktif': 0};
+      return;
+    }
 
-    // Listen to attendances and tasks (we'll just listen to attendances for simplicity, or we can yield a future first)
-    return _client.from('attendances').stream(primaryKey: ['id']).asyncMap((_) async {
-      return await getTeacherDashboardStats();
-    });
+    // Yield initial stats instantly
+    yield await getTeacherDashboardStats();
+
+    // Listen to realtime updates
+    await for (final _ in _client.from('attendances').stream(primaryKey: ['id'])) {
+      yield await getTeacherDashboardStats();
+    }
   }
 
   static Future<Map<String, int>> getTeacherDashboardStats() async {

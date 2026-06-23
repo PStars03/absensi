@@ -21,32 +21,21 @@ class _StudentDashboardState extends State<StudentDashboard> {
   Map<String, dynamic>? _userProfile;
   bool _isLoadingProfile = true;
   int _unreadNotifs = 0;
-  StreamSubscription? _notifSub;
+  late final Future<List<Map<String, dynamic>>> _attendancesFuture;
 
   @override
   void initState() {
     super.initState();
+    _attendancesFuture = SupabaseService.getMyAttendances();
     _fetchProfile();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationService.init(context);
     });
-    
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId != null) {
-      _notifSub = Supabase.instance.client.from('notifications').stream(primaryKey: ['id']).eq('user_id', userId).listen((data) {
-        if (mounted) {
-          setState(() {
-            _unreadNotifs = data.where((n) => n['is_read'] == false).length;
-          });
-        }
-      });
-    }
   }
 
   @override
   void dispose() {
-    _notifSub?.cancel();
     super.dispose();
   }
 
@@ -67,65 +56,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
         Navigator.pushNamed(context, '/student-schedule');
         break;
       case 2:
-        _showProfileSheet();
+        Navigator.pushNamed(context, '/profile');
         break;
     }
-  }
-
-  void _showProfileSheet() {
-    final name = _userProfile?['full_name'] as String? ?? 'Siswa';
-    final nisn = _userProfile?['identity_number'] as String? ?? '-';
-    final className = _userProfile?['class_name'] as String? ?? '-';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'S';
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            CircleAvatar(
-              radius: 36,
-              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
-            ),
-            const SizedBox(height: 12),
-            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('NISN: $nisn • $className', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  SupabaseService.signOut().then((_) {
-                    if (mounted) Navigator.pushReplacementNamed(context, '/login');
-                  });
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Keluar'),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.error)),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -133,11 +66,15 @@ class _StudentDashboardState extends State<StudentDashboard> {
     return Scaffold(
       body: _isLoadingProfile 
           ? const Center(child: CircularProgressIndicator())
-          : StreamBuilder<List<Map<String, dynamic>>>(
-              stream: SupabaseService.getMyAttendancesStream(),
+          : FutureBuilder<List<Map<String, dynamic>>>(
+              future: _attendancesFuture,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
+                }
+                
+                if (snapshot.hasError) {
+                  return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
                 }
 
                 final attendances = snapshot.data ?? [];
@@ -158,10 +95,16 @@ class _StudentDashboardState extends State<StudentDashboard> {
                         // Header
                         Row(
                           children: [
-                            CircleAvatar(
-                              radius: 24,
-                              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-                              child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: AppColors.primaryBlue, fontSize: 18)),
+                            GestureDetector(
+                              onTap: () => Navigator.pushNamed(context, '/profile'),
+                              child: CircleAvatar(
+                                radius: 24,
+                                backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                                backgroundImage: _userProfile?['avatar_url'] != null ? NetworkImage(_userProfile!['avatar_url']) : null,
+                                child: _userProfile?['avatar_url'] == null 
+                                    ? Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: AppColors.primaryBlue, fontSize: 18))
+                                    : null,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -177,11 +120,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
                               onPressed: () {
                                 Navigator.pushNamed(context, '/notifications');
                               },
-                              icon: Badge(
-                                isLabelVisible: _unreadNotifs > 0,
-                                label: Text(_unreadNotifs.toString()),
-                                child: const Icon(Icons.notifications_outlined),
-                              ),
+                              icon: const Icon(Icons.notifications_outlined),
                               style: IconButton.styleFrom(backgroundColor: AppColors.background),
                             ),
                           ],

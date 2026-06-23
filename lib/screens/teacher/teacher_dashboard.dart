@@ -15,11 +15,13 @@ class TeacherDashboard extends StatefulWidget {
 class _TeacherDashboardState extends State<TeacherDashboard> {
   final int _currentNavIndex = 0;
   Map<String, dynamic>? _userProfile;
+  late final Future<Map<String, int>> _statsFuture;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _statsFuture = SupabaseService.getTeacherDashboardStats();
     _fetchProfile();
   }
 
@@ -40,57 +42,9 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         Navigator.pushNamed(context, '/teacher-schedule');
         break;
       case 2:
-        _showProfileSheet();
+        Navigator.pushNamed(context, '/profile');
         break;
     }
-  }
-
-  void _showProfileSheet() {
-    final name = _userProfile?['full_name'] as String? ?? 'Guru';
-    final nip = _userProfile?['identity_number'] as String? ?? '-';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'G';
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            CircleAvatar(
-              radius: 36,
-              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
-            ),
-            const SizedBox(height: 12),
-            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('NIP: $nip', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  SupabaseService.signOut().then((_) {
-                    if (mounted) Navigator.pushReplacementNamed(context, '/login');
-                  });
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Keluar'),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.error)),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -103,9 +57,15 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'G';
 
     return Scaffold(
-      body: StreamBuilder<Map<String, int>>(
-        stream: SupabaseService.getTeacherDashboardStatsStream(),
+      body: FutureBuilder<Map<String, int>>(
+        future: _statsFuture,
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
+          }
           final stats = snapshot.data ?? {'total_siswa': 0, 'hadir_hari_ini': 0, 'tugas_aktif': 0};
           
           return SafeArea(
@@ -117,10 +77,16 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
               // Header
               Row(
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-                    child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: AppColors.primaryBlue, fontSize: 18)),
+                  GestureDetector(
+                    onTap: () => Navigator.pushNamed(context, '/profile'),
+                    child: CircleAvatar(
+                      radius: 24,
+                      backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                      backgroundImage: _userProfile?['avatar_url'] != null ? NetworkImage(_userProfile!['avatar_url']) : null,
+                      child: _userProfile?['avatar_url'] == null 
+                          ? Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: AppColors.primaryBlue, fontSize: 18))
+                          : null,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
