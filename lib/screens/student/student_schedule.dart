@@ -15,7 +15,6 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   final int _currentNavIndex = 1; // Jadwal tab
   bool _isLoading = true;
   List<Map<String, dynamic>> _schedules = [];
-  Map<String, dynamic>? _userProfile;
 
   @override
   void initState() {
@@ -29,10 +28,6 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       final allSchedules = await SupabaseService.getSchedules();
       final profile = await SupabaseService.getCurrentUserProfile();
       
-      if (mounted) {
-        setState(() => _userProfile = profile);
-      }
-
       // Filter by current student class
       if (profile != null) {
         final classId = profile['class_id'];
@@ -61,56 +56,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         Navigator.pushReplacementNamed(context, '/student-dashboard');
         break;
       case 2:
-        _showProfileSheet();
+        Navigator.pushNamed(context, '/profile');
         break;
     }
-  }
-
-  void _showProfileSheet() {
-    final name = _userProfile?['full_name'] as String? ?? 'Siswa';
-    final identityNumber = _userProfile?['identity_number'] as String? ?? '-';
-    final className = _userProfile?['classes']?['name'] as String? ?? '-';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'S';
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            CircleAvatar(
-              radius: 36,
-              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
-            ),
-            const SizedBox(height: 12),
-            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('NISN: $identityNumber • $className', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  SupabaseService.signOut().then((_) {
-                    if (mounted) Navigator.pushReplacementNamed(context, '/login');
-                  });
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Keluar'),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.error)),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
   }
 
   @override

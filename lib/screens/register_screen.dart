@@ -82,7 +82,8 @@ class _RegisterScreenState extends State<RegisterScreen>
       final password = _passwordController.text;
       final fullName = _nameController.text.trim();
       final nisn = _nisnController.text.trim();
-      final className = _selectedClass;
+      final selectedClassData = _classOptions.firstWhere((c) => c['id'] == _selectedClass, orElse: () => {});
+      final className = selectedClassData.isNotEmpty ? '${selectedClassData['level']} ${selectedClassData['name']}' : null;
 
       await SupabaseService.signUp(
         email: email,
@@ -91,6 +92,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         role: 'student',
         identityNumber: nisn,
         className: className,
+        classId: _selectedClass,
       );
 
       if (!mounted) return;
@@ -248,8 +250,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                         ),
                         items: _classOptions
                             .map((c) => DropdownMenuItem(
-                                  value: c['name'] as String,
-                                  child: Text(c['name'] as String),
+                                  value: c['id'] as String,
+                                  child: Text('${c['level']} ${c['name']}'),
                                 ))
                             .toList(),
                         onChanged: (v) => setState(() => _selectedClass = v),

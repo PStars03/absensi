@@ -101,7 +101,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
     final days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     final todayStr = todayInt >= 1 && todayInt <= 7 ? days[todayInt - 1] : '';
     
-    if (dayStr.toLowerCase() != todayStr.toLowerCase()) return false;
+    if (dayStr.trim().toLowerCase() != todayStr.trim().toLowerCase()) return false;
     
     try {
       final now = TimeOfDay.now();
@@ -113,10 +113,13 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       final endParts = endStr.split(':');
       final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
       
+      // Allow 30 minutes before class starts
+      final allowedStart = startMinutes - 30;
+      
       if (isCheckOut) {
-        return nowMinutes >= startMinutes;
+        return nowMinutes >= allowedStart;
       } else {
-        return nowMinutes >= startMinutes && nowMinutes <= endMinutes;
+        return nowMinutes >= allowedStart && nowMinutes <= endMinutes;
       }
     } catch (e) {
       return false; 
@@ -613,8 +616,10 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                   child: ElevatedButton(
                     onPressed: () async {
                       try {
-                        await SupabaseService.updateAttendanceStatus(
+                        await SupabaseService.upsertAttendanceStatus(
                           attendanceId: attendance['id'],
+                          userId: attendance['user_id'],
+                          scheduleId: widget.scheduleId,
                           status: currentStatus,
                         );
                         if (!ctx.mounted) return;

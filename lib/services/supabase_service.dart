@@ -23,6 +23,7 @@ class SupabaseService {
     required String role,
     String? identityNumber,
     String? className,
+    String? classId,
   }) async {
     final Map<String, dynamic> authData = {
       'full_name': fullName,
@@ -31,6 +32,7 @@ class SupabaseService {
 
     if (identityNumber != null) authData['identity_number'] = identityNumber;
     if (className != null) authData['class_name'] = className;
+    if (classId != null) authData['class_id'] = classId;
 
     return await _client.auth.signUp(
       email: email,
@@ -180,6 +182,14 @@ class SupabaseService {
   // ============================================================
   // Teacher Methods
   // ============================================================
+  // Teacher / Wali Kelas Methods
+  // ============================================================
+
+  static Future<void> setWaliKelas(String profileId, String? classId) async {
+    await _client.from('teachers').update({
+      'wali_class_id': classId,
+    }).eq('profile_id', profileId);
+  }
 
   static Future<Map<String, dynamic>?> getTeacherProfile() async {
     final user = currentUser;
@@ -335,13 +345,25 @@ class SupabaseService {
     }
   }
 
-  static Future<void> updateAttendanceStatus({
-    required String attendanceId,
+  static Future<void> upsertAttendanceStatus({
+    String? attendanceId,
+    required String userId,
+    required String scheduleId,
     required String status,
   }) async {
-    await _client.from('attendances').update({
-      'status': status,
-    }).eq('id', attendanceId);
+    if (attendanceId != null) {
+      await _client.from('attendances').update({
+        'status': status,
+      }).eq('id', attendanceId);
+    } else {
+      final today = DateTime.now().toIso8601String().split('T').first;
+      await _client.from('attendances').insert({
+        'user_id': userId,
+        'schedule_id': scheduleId,
+        'date': today,
+        'status': status,
+      });
+    }
   }
 
 
@@ -588,7 +610,7 @@ class SupabaseService {
       // Get teacher id
       final teacher = await getTeacherProfile();
       if (teacher != null) {
-        final teacherId = teacher['id'];
+        final teacherId = teacher['profile_id'];
         
         // Total Siswa (count all students for simplicity, or students in their wali kelas)
         // Let's just count all students for now
@@ -605,7 +627,8 @@ class SupabaseService {
               .select('id')
               .eq('date', today)
               .inFilter('schedule_id', scheduleIds)
-              .eq('status', 'hadir');
+              .eq('status', 'hadir')
+              .neq('user_id', teacherId);
           hadirHariIni = attendancesRes.length;
 
           // Tugas aktif
@@ -663,10 +686,12 @@ class SupabaseService {
         } else {
           // Default alpa if no record
           combined.add({
+            'id': null,
             'user_id': profileId,
             'profiles': st['profiles'],
             'status': 'alpa',
             'check_in': null,
+            'date': today,
           });
         }
       }
@@ -1009,6 +1034,10 @@ class SupabaseService {
   // ============================================================
 
   static Future<List<Map<String, dynamic>>> getProfilesByRole(String role) async {
+    if (role == 'teacher') {
+      final response = await _client.from('profiles').select('*, teachers(wali_class_id, classes(name))').eq('role', 'teacher').order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    }
     final response = await _client.from('profiles').select().eq('role', role).order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(response);
   }

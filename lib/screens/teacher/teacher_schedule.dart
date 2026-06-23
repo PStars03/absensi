@@ -15,20 +15,11 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
   final int _currentNavIndex = 1; // Jadwal tab
   bool _isLoading = true;
   List<Map<String, dynamic>> _schedules = [];
-  Map<String, dynamic>? _userProfile;
 
   @override
   void initState() {
     super.initState();
     _fetchSchedules();
-    _fetchProfile();
-  }
-
-  Future<void> _fetchProfile() async {
-    final profile = await SupabaseService.getCurrentUserProfile();
-    if (mounted) {
-      setState(() => _userProfile = profile);
-    }
   }
 
   Future<void> _fetchSchedules() async {
@@ -55,56 +46,11 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
         Navigator.pushReplacementNamed(context, '/teacher-dashboard');
         break;
       case 2:
-        _showProfileSheet();
+        Navigator.pushNamed(context, '/profile');
         break;
     }
   }
 
-  void _showProfileSheet() {
-    final name = _userProfile?['full_name'] as String? ?? 'Guru';
-    final nip = _userProfile?['identity_number'] as String? ?? '-';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'G';
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 20),
-            CircleAvatar(
-              radius: 36,
-              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.primaryBlue)),
-            ),
-            const SizedBox(height: 12),
-            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('NIP: $nip', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade500)),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  SupabaseService.signOut().then((_) {
-                    if (mounted) Navigator.pushReplacementNamed(context, '/login');
-                  });
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Keluar'),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.error)),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,6 +70,7 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
           final schedule = _schedules[index];
           final mapelName = schedule['subjects']?['name'] ?? schedule['mapel_name'] ?? 'Mata Pelajaran';
           final className = schedule['classes']?['name'] ?? schedule['class_name'] ?? 'Kelas';
+          final teacherName = schedule['profiles']?['full_name'] ?? 'Guru';
           final dayStr = schedule['day'] ?? '-';
           final startStr = schedule['start_time'] ?? '';
           final endStr = schedule['end_time'] ?? '';
@@ -175,6 +122,8 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
                   child: Column(
                     children: [
                       _buildInfoRow(Icons.calendar_today_rounded, '$dayStr, ${startStr.substring(0, min(startStr.length, 5))} - ${endStr.substring(0, min(endStr.length, 5))}'),
+                      const SizedBox(height: 8),
+                      _buildInfoRow(Icons.person_rounded, teacherName),
                       const SizedBox(height: 8),
                       _buildInfoRow(Icons.room_rounded, roomStr),
                     ],

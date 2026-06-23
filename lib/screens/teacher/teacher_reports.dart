@@ -33,7 +33,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
       final schedules = await SupabaseService.client
           .from('schedules')
           .select('id, mapel_name, classes(name)')
-          .eq('teacher_id', teacher['id']);
+          .eq('teacher_id', teacher['profile_id']);
 
       final scheduleIds = schedules.map((e) => e['id']).toList();
 
@@ -51,6 +51,7 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
           ''')
           .eq('date', dateStr)
           .inFilter('schedule_id', scheduleIds)
+          .neq('user_id', teacher['profile_id'])
           .order('created_at', ascending: false);
 
       if (mounted) {

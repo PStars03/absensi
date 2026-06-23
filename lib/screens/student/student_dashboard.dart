@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/stat_card.dart';
@@ -20,7 +19,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
   final int _currentNavIndex = 0;
   Map<String, dynamic>? _userProfile;
   bool _isLoadingProfile = true;
-  int _unreadNotifs = 0;
   late final Future<List<Map<String, dynamic>>> _attendancesFuture;
 
   @override

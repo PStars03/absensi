@@ -7,11 +7,8 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   static final _supabase = Supabase.instance.client;
   static StreamSubscription? _notificationSubscription;
-  static BuildContext? _context;
 
   static Future<void> init(BuildContext context) async {
-    _context = context;
-    
     // Initialize Local Notifications
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidInit);
@@ -28,25 +25,6 @@ class NotificationService {
       // Use a simple polling or just rely on the dashboard stream to avoid multi-stream deadlocks
       // For now, we removed the background stream here to prevent ANR.
     }
-  }
-
-  static void _showInAppNotification(String title, String message) {
-    if (_context == null || !_context!.mounted) return;
-    ScaffoldMessenger.of(_context!).showSnackBar(
-      SnackBar(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text(message),
-          ],
-        ),
-        backgroundColor: Colors.blueAccent,
-        duration: const Duration(seconds: 4),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   static Future<void> scheduleDeadlineNotification(int id, String title, String body, DateTime deadline) async {

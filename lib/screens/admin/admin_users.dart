@@ -126,6 +126,9 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
         final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
         final identifier = u['identity_number'] ?? '-';
         final className = u['class_name'];
+        final teacherData = (u['teachers'] is List && (u['teachers'] as List).isNotEmpty) ? u['teachers'][0] : null;
+        final waliClassName = teacherData?['classes']?['name'];
+        final displayClassName = role == 'teacher' ? (waliClassName != null ? 'Wali: $waliClassName' : 'Bukan Wali Kelas') : (className ?? 'Belum ada kelas');
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
@@ -144,7 +147,7 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
               children: [
                 Text(u['email'] ?? '', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey.shade500)),
                 Text(
-                  '${role == 'teacher' ? 'NIP' : 'NISN'}: $identifier${className != null ? ' • $className' : ''}',
+                  '${role == 'teacher' ? 'NIP' : 'NISN'}: $identifier • $displayClassName',
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.grey.shade400),
                 ),
               ],
@@ -152,11 +155,14 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
             trailing: PopupMenuButton(
               itemBuilder: (_) => [
                 const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                if (role == 'teacher') const PopupMenuItem(value: 'set_wali', child: Text('Atur Wali Kelas')),
                 const PopupMenuItem(value: 'toggle', child: Text('Nonaktifkan')),
                 const PopupMenuItem(value: 'delete', child: Text('Hapus', style: TextStyle(color: AppColors.error))),
               ],
               onSelected: (v) async {
-                if (v == 'delete') {
+                if (v == 'set_wali') {
+                  _showSetWaliKelasDialog(u);
+                } else if (v == 'delete') {
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (c) => AlertDialog(
@@ -324,6 +330,60 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
                   ],
                 ),
               ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSetWaliKelasDialog(Map<String, dynamic> user) async {
+    final classes = await SupabaseService.client.from('classes').select().order('name');
+    final teacherData = (user['teachers'] is List && (user['teachers'] as List).isNotEmpty) ? user['teachers'][0] : null;
+    String? selectedClassId = teacherData?['wali_class_id'];
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Atur Wali Kelas'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Pilih kelas untuk ${user['full_name']}'),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String?>(
+                    initialValue: selectedClassId,
+                    decoration: const InputDecoration(labelText: 'Kelas'),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Bukan Wali Kelas')),
+                      ...classes.map((c) => DropdownMenuItem(value: c['id'] as String, child: Text(c['name'] as String))),
+                    ],
+                    onChanged: (val) => setStateDialog(() => selectedClassId = val),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+                ElevatedButton(
+                  onPressed: () async {
+                    try {
+                      await SupabaseService.setWaliKelas(user['id'], selectedClassId);
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      _fetchUsers();
+                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Wali kelas berhasil diatur')));
+                    } catch (e) {
+                      if (!ctx.mounted) return;
+                      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Gagal mengatur: $e')));
+                    }
+                  },
+                  child: const Text('Simpan'),
+                ),
+              ],
             );
           },
         );
