@@ -546,7 +546,11 @@ class SupabaseService {
       subjects:subject_id ( code, name ),
       classes:class_id ( name )
     ''').order('created_at');
-    return List<Map<String, dynamic>>.from(response);
+    return response;
+  }
+
+  static Future<void> deleteClass(String id) async {
+    await _client.from('classes').delete().eq('id', id);
   }
 
   // ============================================================
@@ -744,8 +748,13 @@ class SupabaseService {
     });
   }
 
+  static Future<void> deleteMaterial(String materialId) async {
+    // Delete associated files from storage first if needed (optional, or rely on cascade/manual cleanup)
+    await _client.from('materials').delete().eq('id', materialId);
+  }
+
   // ============================================================
-  // Tasks Methods
+  // Task & Assignment Methods
   // ============================================================
 
   static Future<List<Map<String, dynamic>>> getTasks(String scheduleId) async {
@@ -785,7 +794,11 @@ class SupabaseService {
         ''')
         .eq('task_id', taskId)
         .order('submitted_at', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
+    return response;
+  }
+
+  static Future<void> deleteTask(String taskId) async {
+    await _client.from('tasks').delete().eq('id', taskId);
   }
 
   static Future<Map<String, dynamic>?> getMyTaskSubmission(String taskId) async {
@@ -1105,7 +1118,16 @@ class SupabaseService {
     
     return List<Map<String, dynamic>>.from(response);
   }
-
+  static Future<void> updateUserProfileByAdmin(String userId, {
+    String? fullName,
+    String? nisnNip,
+  }) async {
+    await _client.rpc('update_user_profile_by_admin', params: {
+      'target_user_id': userId,
+      'new_full_name': fullName,
+      'new_nisn_nip': nisnNip,
+    });
+  }
 
   // ============================================================
   // Admin Schedule Management

@@ -185,6 +185,8 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
                     }
                   }
+                } else if (v == 'edit') {
+                  _showEditUser(context, u);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Aksi $v belum diimplementasikan'), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
@@ -193,6 +195,80 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
               },
             ),
           ),
+        );
+      },
+    );
+  }
+
+  void _showEditUser(BuildContext context, Map<String, dynamic> user) {
+    final nameCtrl = TextEditingController(text: user['full_name']);
+    final identityCtrl = TextEditingController(text: user['nisn_nip']);
+    final role = user['role'];
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalContext, setStateModal) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24, right: 24, top: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Edit Pengguna (${user['email']})', style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(labelText: 'Nama Lengkap', prefixIcon: Icon(Icons.person_outline_rounded)),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: identityCtrl,
+                      decoration: InputDecoration(labelText: role == 'teacher' ? 'NIP' : 'NISN', prefixIcon: const Icon(Icons.badge_outlined)),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: isSaving ? null : () async {
+                          if (nameCtrl.text.isEmpty || identityCtrl.text.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama dan Identitas harus diisi!')));
+                            return;
+                          }
+                          setStateModal(() => isSaving = true);
+                          try {
+                            await SupabaseService.updateUserProfileByAdmin(
+                              user['id'],
+                              fullName: nameCtrl.text.trim(),
+                              nisnNip: identityCtrl.text.trim(),
+                            );
+                            if (!ctx.mounted || !context.mounted) return;
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil pengguna berhasil diperbarui')));
+                            _fetchUsers();
+                          } catch (e) {
+                            setStateModal(() => isSaving = false);
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memperbarui: $e')));
+                          }
+                        },
+                        child: isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan Perubahan'),
+                      ),
+                    )
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );

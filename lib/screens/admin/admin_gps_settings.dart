@@ -40,6 +40,32 @@ class _AdminGpsSettingsScreenState extends State<AdminGpsSettingsScreen> {
     }
   }
 
+  Future<void> _confirmDeleteLocation(String id, String locationName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Lokasi'),
+        content: Text('Apakah Anda yakin ingin menghapus lokasi $locationName? Tindakan ini tidak dapat dibatalkan.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          TextButton(onPressed: () => Navigator.pop(context, true), style: TextButton.styleFrom(foregroundColor: Colors.red), child: const Text('Hapus')),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await SupabaseService.deleteAttendanceLocation(id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lokasi $locationName berhasil dihapus')));
+        _fetchLocations();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus lokasi: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -67,9 +93,18 @@ class _AdminGpsSettingsScreenState extends State<AdminGpsSettingsScreen> {
                         title: Text(loc['name'], style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
                         subtitle: Text('Lat: ${loc['latitude']}\nLng: ${loc['longitude']}\nRadius: ${loc['radius_meters']}m', style: const TextStyle(fontSize: 12)),
                         isThreeLine: true,
-                        trailing: IconButton(
-                          icon: const Icon(Icons.edit_rounded, color: AppColors.primaryBlue),
-                          onPressed: () => _showLocationDialog(location: loc),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_rounded, color: AppColors.primaryBlue),
+                              onPressed: () => _showLocationDialog(location: loc),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                              onPressed: () => _confirmDeleteLocation(loc['id'], loc['name']),
+                            ),
+                          ],
                         ),
                       ),
                     );

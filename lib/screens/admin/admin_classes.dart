@@ -124,6 +124,32 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
     );
   }
 
+  Future<void> _confirmDelete(String id, String className) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Kelas'),
+        content: Text('Apakah Anda yakin ingin menghapus kelas $className? Tindakan ini tidak dapat dibatalkan dan akan gagal jika ada siswa di kelas ini.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          TextButton(onPressed: () => Navigator.pop(context, true), style: TextButton.styleFrom(foregroundColor: Colors.red), child: const Text('Hapus')),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await SupabaseService.deleteClass(id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Kelas $className berhasil dihapus')));
+        _fetchClasses();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus kelas (Mungkin masih ada siswa): $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -172,6 +198,10 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                                   Text('Lokasi: ${cls['attendance_locations']?['name'] ?? 'Belum disetel'}', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.primaryBlue)),
                                 ],
                               ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                              onPressed: () => _confirmDelete(cls['id'], cls['name'] ?? 'Kelas'),
                             ),
                             const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                           ],

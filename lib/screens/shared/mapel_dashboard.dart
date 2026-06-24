@@ -643,6 +643,58 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
     );
   }
 
+  Future<void> _confirmDeleteMaterial(String id, String title) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Materi'),
+        content: Text('Apakah Anda yakin ingin menghapus materi "$title"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          TextButton(onPressed: () => Navigator.pop(context, true), style: TextButton.styleFrom(foregroundColor: Colors.red), child: const Text('Hapus')),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await SupabaseService.deleteMaterial(id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Materi berhasil dihapus')));
+        _fetchData();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus materi: $e')));
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteTask(String id, String title) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Tugas'),
+        content: Text('Apakah Anda yakin ingin menghapus tugas "$title"? Semua jawaban siswa untuk tugas ini juga akan terhapus.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          TextButton(onPressed: () => Navigator.pop(context, true), style: TextButton.styleFrom(foregroundColor: Colors.red), child: const Text('Hapus')),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await SupabaseService.deleteTask(id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tugas berhasil dihapus')));
+        _fetchData();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus tugas: $e')));
+      }
+    }
+  }
+
   // =========================================================================
   // Materi
   // =========================================================================
@@ -671,11 +723,22 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
             ),
             title: Text(m['title'] ?? 'Tanpa Judul', style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             subtitle: Text(m['description'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-            trailing: m['file_url'] != null ? IconButton(
-              icon: const Icon(Icons.download_rounded),
-              color: AppColors.primaryBlue,
-              onPressed: () => _openUrl(m['file_url']),
-            ) : null,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (m['file_url'] != null)
+                  IconButton(
+                    icon: const Icon(Icons.download_rounded),
+                    color: AppColors.primaryBlue,
+                    onPressed: () => _openUrl(m['file_url']),
+                  ),
+                if (widget.role == 'teacher')
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                    onPressed: () => _confirmDeleteMaterial(m['id'], m['title'] ?? 'Materi'),
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -812,7 +875,17 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                   ),
               ],
             ),
-            trailing: const Icon(Icons.chevron_right_rounded),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.role == 'teacher')
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                    onPressed: () => _confirmDeleteTask(t['id'], t['title'] ?? 'Tugas'),
+                  ),
+                const Icon(Icons.chevron_right_rounded),
+              ],
+            ),
             onTap: () => _showTaskDetails(t),
           ),
         );

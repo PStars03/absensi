@@ -78,9 +78,11 @@ class _MyAppState extends State<MyApp> {
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      initialRoute: '/login',
+      initialRoute: '/',
       onGenerateRoute: (settings) {
         switch (settings.name) {
+          case '/':
+            return MaterialPageRoute(builder: (_) => const SplashScreen());
           // Auth
           case '/login':
             return _buildRoute(const LoginScreen(), settings);
@@ -171,5 +173,82 @@ class _MyAppState extends State<MyApp> {
 
   MaterialPageRoute _buildRoute(Widget page, RouteSettings settings) {
     return MaterialPageRoute(builder: (_) => page, settings: settings);
+  }
+}
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    // Memberi sedikit delay agar UI loading sempat muncul (opsional)
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) {
+      if (mounted) Navigator.pushReplacementNamed(context, '/login');
+      return;
+    }
+
+    try {
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+          
+      final role = data['role'] as String;
+      if (!mounted) return;
+      
+      if (role == 'student') {
+        Navigator.pushReplacementNamed(context, '/student-dashboard');
+      } else if (role == 'teacher') {
+        Navigator.pushReplacementNamed(context, '/teacher-dashboard');
+      } else if (role == 'superadmin') {
+        Navigator.pushReplacementNamed(context, '/admin-dashboard');
+      } else {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    } catch (e) {
+      // Jika profil tidak ditemukan atau error lain
+      if (mounted) Navigator.pushReplacementNamed(context, '/login');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.primaryBlue,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.school_rounded, size: 80, color: Colors.white),
+            const SizedBox(height: 20),
+            const Text(
+              'EduPresence',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 40),
+            const CircularProgressIndicator(color: Colors.white),
+          ],
+        ),
+      ),
+    );
   }
 }
