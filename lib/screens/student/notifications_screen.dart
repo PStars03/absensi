@@ -13,40 +13,16 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final _supabase = Supabase.instance.client;
-  List<Map<String, dynamic>> _notifications = [];
-  bool _isLoading = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchNotifications();
-  }
-
-  Future<void> _fetchNotifications() async {
-    setState(() => _isLoading = true);
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return;
-
-      final response = await _supabase
-          .from('notifications')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
-
-      if (mounted) {
-        setState(() {
-          _notifications = List<Map<String, dynamic>>.from(response);
-          _isLoading = false;
-        });
-      }
-
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal memuat notifikasi: $e')));
-      }
-    }
+  Stream<List<Map<String, dynamic>>> get _notificationsStream {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return const Stream.empty();
+    
+    return _supabase
+        .from('notifications')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
   }
 
   @override
@@ -55,103 +31,122 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       appBar: AppBar(
         title: const Text('Notifikasi'),
         actions: [
-          if (_notifications.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.done_all_rounded),
-              tooltip: 'Tandai Semua Dibaca',
-              onPressed: () async {
-                await SupabaseService.markAllNotificationsAsRead();
-                _fetchNotifications();
-              },
-            ),
+          IconButton(
+            icon: const Icon(Icons.done_all_rounded),
+            tooltip: 'Tandai Semua Dibaca',
+            onPressed: () async {
+              await SupabaseService.markAllNotificationsAsRead();
+            },
+          ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _notifications.isEmpty
-              ? const Center(child: Text('Belum ada notifikasi.', style: TextStyle(fontFamily: 'Poppins')))
-              : ListView.separated(
-                  itemCount: _notifications.length,
-                  separatorBuilder: (itemContext, index) => const Divider(height: 1),
-                  itemBuilder: (itemContext, index) {
-                    final notif = _notifications[index];
-                    final isRead = notif['is_read'] == true;
-                    final date = DateTime.parse(notif['created_at']).toLocal();
-                    final timeStr = DateFormat('dd MMM yyyy, HH:mm').format(date);
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _notificationsStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.primaryBlue));
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: AppColors.error)));
+          }
 
-                    IconData icon;
-                    Color color;
-                    switch (notif['type']) {
-                      case 'materi':
-                        icon = Icons.menu_book_rounded;
-                        color = AppColors.primaryBlue;
-                        break;
-                      case 'tugas':
-                      case 'deadline':
-                        icon = Icons.assignment_rounded;
-                        color = AppColors.warning;
-                        break;
-                      default:
-                        icon = Icons.notifications_rounded;
-                        color = Colors.grey;
+          final notifications = snapshot.data ?? [];
+
+          if (notifications.isEmpty) {
+            return const Center(
+              child: Text('Tidak ada notifikasi saat ini.', style: TextStyle(fontFamily: 'Poppins', color: Colors.grey)),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: notifications.length,
+            itemBuilder: (context, index) {
+              final notif = notifications[index];
+              final isRead = notif['is_read'] ?? false;
+              final dateStr = notif['created_at'] as String;
+              final date = DateTime.parse(dateStr).toLocal();
+              
+              final timeFormatter = DateFormat('HH:mm');
+              final dateFormatter = DateFormat('dd MMM yyyy');
+              final timeString = '${timeFormatter.format(date)} - ${dateFormatter.format(date)}';
+
+              IconData icon;
+              Color color;
+              switch (notif['type']) {
+                case 'task':
+                  icon = Icons.assignment_rounded;
+                  color = AppColors.warning;
+                  break;
+                case 'material':
+                  icon = Icons.menu_book_rounded;
+                  color = AppColors.primaryBlue;
+                  break;
+                default:
+                  icon = Icons.notifications_rounded;
+                  color = AppColors.primaryBlue;
+              }
+
+              return Card(
+                elevation: 0,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                color: isRead ? Colors.white : AppColors.primaryBlue.withValues(alpha: 0.05),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: CircleAvatar(
+                    backgroundColor: color.withValues(alpha: 0.1),
+                    child: Icon(icon, color: color),
+                  ),
+                  title: Text(
+                    notif['title'] ?? '',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      Text(
+                        notif['message'] ?? '',
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        timeString,
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      ),
+                    ],
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey),
+                    onPressed: () async {
+                      try {
+                        await SupabaseService.deleteNotification(notif['id']);
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
+                      }
+                    },
+                  ),
+                  onTap: () async {
+                    if (!(notif['is_read'] ?? false)) {
+                      await _supabase.from('notifications').update({'is_read': true}).eq('id', notif['id']);
                     }
-
-                    return Dismissible(
-                      key: Key(notif['id'].toString()),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        color: AppColors.error,
-                        child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
-                      ),
-                      onDismissed: (direction) async {
-                        final notifId = notif['id'].toString();
-                        setState(() => _notifications.removeAt(index));
-                        try {
-                          await SupabaseService.deleteNotification(notifId);
-                        } catch (e) {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
-                        }
-                      },
-                      child: Container(
-                        color: isRead ? Colors.transparent : AppColors.primaryBlue.withValues(alpha: 0.05),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: color.withValues(alpha: 0.2),
-                            child: Icon(icon, color: color, size: 20),
-                          ),
-                          title: Text(
-                            notif['title'] ?? '',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
-                              fontSize: 14,
-                            ),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Text(notif['message'] ?? '', style: const TextStyle(fontSize: 13)),
-                              const SizedBox(height: 4),
-                              Text(timeStr, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                            ],
-                          ),
-                          isThreeLine: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          onTap: () async {
-                            if (!isRead) {
-                              await _supabase.from('notifications').update({'is_read': true}).eq('id', notif['id']);
-                              _fetchNotifications();
-                            }
-                          },
-                        ),
-                      ),
-                    );
                   },
                 ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

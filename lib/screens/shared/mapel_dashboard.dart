@@ -166,11 +166,28 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                         children: [
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: () {
+                              onPressed: () async {
                                 if (!_isTimeAllowed(false)) {
                                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Belum waktunya jadwal kelas ini.')));
                                   return;
                                 }
+                                
+                                if (widget.role == 'student') {
+                                  try {
+                                    final hasStarted = await SupabaseService.hasTeacherStartedClass(widget.scheduleId);
+                                    if (!hasStarted) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guru belum membuka kelas (belum absen masuk). Anda belum bisa absen.')));
+                                      return;
+                                    }
+                                  } catch (e) {
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error cek status kelas: $e')));
+                                    return;
+                                  }
+                                }
+
+                                if (!context.mounted) return;
                                 Navigator.pushNamed(context, '/face-scan', arguments: {
                                   'type': 'masuk',
                                   'scheduleId': widget.scheduleId,

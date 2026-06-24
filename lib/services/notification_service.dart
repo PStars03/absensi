@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   static final _supabase = Supabase.instance.client;
-  static StreamSubscription? _notificationSubscription;
+  static RealtimeChannel? _notificationChannel;
 
   static Future<void> init(BuildContext context) async {
     // Initialize Local Notifications
@@ -22,8 +22,22 @@ class NotificationService {
     // Setup Realtime Listener for new notifications
     final userId = _supabase.auth.currentUser?.id;
     if (userId != null) {
-      // Use a simple polling or just rely on the dashboard stream to avoid multi-stream deadlocks
-      // For now, we removed the background stream here to prevent ANR.
+      _notificationChannel?.unsubscribe();
+      _notificationChannel = _supabase.channel('public:notifications').onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (payload) {
+            final newNotification = payload.newRecord;
+            final title = newNotification['title'] ?? 'Notifikasi Baru';
+            final message = newNotification['message'] ?? 'Anda memiliki pemberitahuan baru.';
+            showLocalNotification(DateTime.now().millisecond, title, message);
+          }).subscribe();
     }
   }
 
@@ -58,6 +72,6 @@ class NotificationService {
   }
 
   static void dispose() {
-    _notificationSubscription?.cancel();
+    _notificationChannel?.unsubscribe();
   }
 }

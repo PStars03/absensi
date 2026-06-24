@@ -271,6 +271,25 @@ class SupabaseService {
     });
   }
 
+  static Future<bool> hasTeacherStartedClass(String scheduleId) async {
+    final today = DateTime.now().toIso8601String().split('T').first;
+    
+    final scheduleData = await _client.from('schedules').select('teacher_id').eq('id', scheduleId).maybeSingle();
+    if (scheduleData == null || scheduleData['teacher_id'] == null) return false;
+    
+    final teacherId = scheduleData['teacher_id'];
+    
+    final teacherAttendance = await _client
+        .from('attendances')
+        .select('id')
+        .eq('schedule_id', scheduleId)
+        .eq('user_id', teacherId)
+        .eq('date', today)
+        .maybeSingle();
+        
+    return teacherAttendance != null;
+  }
+
   static Future<void> checkInIzin({
     required String scheduleId,
     required String suratIjinUrl,
@@ -374,39 +393,11 @@ class SupabaseService {
   static Future<void> addMeetingSummary(String scheduleId, String summary) async {
     final today = DateTime.now().toIso8601String().split('T').first;
     
-    // Check if meeting already exists for today
-    final existing = await _client.from('meetings')
-      .select('id, meeting_number')
-      .eq('schedule_id', scheduleId)
-      .eq('date', today)
-      .maybeSingle();
-
-    if (existing != null) {
-      // Update existing
-      await _client.from('meetings').update({
-        'summary': summary,
-      }).eq('id', existing['id']);
-    } else {
-      // Get the latest meeting number
-      final latest = await _client.from('meetings')
-        .select('meeting_number')
-        .eq('schedule_id', scheduleId)
-        .order('meeting_number', ascending: false)
-        .limit(1)
-        .maybeSingle();
-      
-      int nextNumber = 1;
-      if (latest != null && latest['meeting_number'] != null) {
-        nextNumber = (latest['meeting_number'] as int) + 1;
-      }
-
-      await _client.from('meetings').insert({
-        'schedule_id': scheduleId,
-        'meeting_number': nextNumber,
-        'date': today,
-        'summary': summary,
-      });
-    }
+    await _client.rpc('add_meeting_summary', params: {
+      'p_schedule_id': scheduleId,
+      'p_summary': summary,
+      'p_date': today,
+    });
 
     // --- INSERT ALPA FOR STUDENTS WHO HAVEN'T CHECKED IN ---
     final scheduleData = await _client.from('schedules').select('class_id').eq('id', scheduleId).maybeSingle();

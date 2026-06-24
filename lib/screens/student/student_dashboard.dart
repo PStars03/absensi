@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/stat_card.dart';
@@ -19,7 +20,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
   final int _currentNavIndex = 0;
   Map<String, dynamic>? _userProfile;
   bool _isLoadingProfile = true;
-  int _unreadNotifsCount = 0;
   late final Future<List<Map<String, dynamic>>> _attendancesFuture;
 
   @override
@@ -40,11 +40,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   Future<void> _fetchProfile() async {
     final profile = await SupabaseService.getCurrentUserProfile();
-    final count = await SupabaseService.getUnreadNotificationCount();
     if (mounted) {
       setState(() {
         _userProfile = profile;
-        _unreadNotifsCount = count;
         _isLoadingProfile = false;
       });
     }
@@ -117,19 +115,28 @@ class _StudentDashboardState extends State<StudentDashboard> {
                                 ],
                               ),
                             ),
-                            IconButton(
-                              onPressed: () {
-                                Navigator.pushNamed(context, '/notifications').then((_) {
-                                  _fetchProfile(); // refresh count when coming back
-                                });
+                            StreamBuilder<List<Map<String, dynamic>>>(
+                              stream: Supabase.instance.client
+                                  .from('notifications')
+                                  .stream(primaryKey: ['id'])
+                                  .eq('user_id', Supabase.instance.client.auth.currentUser!.id),
+                              builder: (context, snapshot) {
+                                final unreadCount = snapshot.data?.where((n) => n['is_read'] == false).length ?? 0;
+                                return IconButton(
+                                  onPressed: () {
+                                    Navigator.pushNamed(context, '/notifications').then((_) {
+                                      _fetchProfile(); // refresh data when coming back
+                                    });
+                                  },
+                                  icon: Badge(
+                                    isLabelVisible: unreadCount > 0,
+                                    label: Text('$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                                    backgroundColor: AppColors.error,
+                                    child: const Icon(Icons.notifications_outlined),
+                                  ),
+                                  style: IconButton.styleFrom(backgroundColor: AppColors.background),
+                                );
                               },
-                              icon: Badge(
-                                isLabelVisible: _unreadNotifsCount > 0,
-                                label: Text('$_unreadNotifsCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
-                                backgroundColor: AppColors.error,
-                                child: const Icon(Icons.notifications_outlined),
-                              ),
-                              style: IconButton.styleFrom(backgroundColor: AppColors.background),
                             ),
                           ],
                         ),
