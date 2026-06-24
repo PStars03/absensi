@@ -65,15 +65,16 @@ class _LoginScreenState extends State<LoginScreen>
 
       // Get profile to determine role
       final profile = await SupabaseService.getCurrentUserProfile();
-      if (!mounted) return;
-
-      setState(() => _isLoading = false);
-
       if (profile == null) {
-        // Fallback or error if profile missing, but allow login
-        // Actually, we should route based on role if exists
-        _showError('Profil pengguna tidak ditemukan.');
-        await SupabaseService.signOut();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil tidak ditemukan')));
+        return;
+      }
+      
+      if (profile['is_active'] == false) {
+        await Supabase.instance.client.auth.signOut();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Akun Anda telah dinonaktifkan oleh Admin.')));
         return;
       }
 

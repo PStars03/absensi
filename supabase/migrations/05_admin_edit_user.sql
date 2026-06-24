@@ -15,7 +15,7 @@ BEGIN
   UPDATE public.profiles
   SET 
     full_name = COALESCE(new_full_name, full_name),
-    nisn_nip = COALESCE(new_nisn_nip, nisn_nip)
+    identity_number = COALESCE(new_nisn_nip, identity_number)
   WHERE id = target_user_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

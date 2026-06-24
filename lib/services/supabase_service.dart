@@ -1129,6 +1129,13 @@ class SupabaseService {
     });
   }
 
+  static Future<void> toggleUserStatusByAdmin(String userId, bool newStatus) async {
+    await _client.rpc('toggle_user_status_by_admin', params: {
+      'target_user_id': userId,
+      'new_status': newStatus,
+    });
+  }
+
   // ============================================================
   // Admin Schedule Management
   // ============================================================

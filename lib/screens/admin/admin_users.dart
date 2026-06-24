@@ -146,9 +146,20 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(u['email'] ?? '', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey.shade500)),
-                Text(
-                  '${role == 'teacher' ? 'NIP' : 'NISN'}: $identifier • $displayClassName',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.grey.shade400),
+                Row(
+                  children: [
+                    Text(
+                      '${role == 'teacher' ? 'NIP' : 'NISN'}: $identifier • $displayClassName',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.grey.shade400),
+                    ),
+                    const SizedBox(width: 8),
+                    if (u['is_active'] == false)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: Colors.red.shade100, borderRadius: BorderRadius.circular(4)),
+                        child: Text('Nonaktif', style: TextStyle(fontSize: 10, color: Colors.red.shade700, fontWeight: FontWeight.bold)),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -156,7 +167,7 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
               itemBuilder: (_) => [
                 const PopupMenuItem(value: 'edit', child: Text('Edit')),
                 if (role == 'teacher') const PopupMenuItem(value: 'set_wali', child: Text('Atur Wali Kelas')),
-                const PopupMenuItem(value: 'toggle', child: Text('Nonaktifkan')),
+                PopupMenuItem(value: 'toggle', child: Text(u['is_active'] == false ? 'Aktifkan' : 'Nonaktifkan')),
                 const PopupMenuItem(value: 'delete', child: Text('Hapus', style: TextStyle(color: AppColors.error))),
               ],
               onSelected: (v) async {
@@ -184,6 +195,17 @@ class _AdminUsersState extends State<AdminUsers> with SingleTickerProviderStateM
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
                     }
+                  }
+                } else if (v == 'toggle') {
+                  final newStatus = u['is_active'] == false;
+                  try {
+                    await SupabaseService.toggleUserStatusByAdmin(u['id'], newStatus);
+                    _fetchUsers();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(newStatus ? 'Pengguna diaktifkan' : 'Pengguna dinonaktifkan')));
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengubah status: $e')));
                   }
                 } else if (v == 'edit') {
                   _showEditUser(context, u);

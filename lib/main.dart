@@ -203,10 +203,16 @@ class _SplashScreenState extends State<SplashScreen> {
     try {
       final data = await Supabase.instance.client
           .from('profiles')
-          .select('role')
+          .select('role, is_active')
           .eq('id', session.user.id)
           .single();
           
+      if (data['is_active'] == false) {
+        await Supabase.instance.client.auth.signOut();
+        if (mounted) Navigator.pushReplacementNamed(context, '/login');
+        return;
+      }
+
       final role = data['role'] as String;
       if (!mounted) return;
       
@@ -214,7 +220,7 @@ class _SplashScreenState extends State<SplashScreen> {
         Navigator.pushReplacementNamed(context, '/student-dashboard');
       } else if (role == 'teacher') {
         Navigator.pushReplacementNamed(context, '/teacher-dashboard');
-      } else if (role == 'superadmin') {
+      } else if (role == 'admin') {
         Navigator.pushReplacementNamed(context, '/admin-dashboard');
       } else {
         Navigator.pushReplacementNamed(context, '/login');
