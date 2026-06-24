@@ -239,7 +239,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.school_rounded, size: 80, color: Colors.white),
+            Image.asset('assets/images/logo-loading.png', width: 120, height: 120),
             const SizedBox(height: 20),
             const Text(
               'EduPresence',
