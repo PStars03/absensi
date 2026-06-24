@@ -1033,6 +1033,19 @@ class SupabaseService {
   // Admin Methods
   // ============================================================
 
+  static Future<List<Map<String, dynamic>>> getRecentAttendances() async {
+    final response = await _client
+        .from('attendances')
+        .select('''
+          *,
+          profiles:user_id ( full_name, role ),
+          schedules:schedule_id ( mapel_name, classes(name) )
+        ''')
+        .order('created_at', ascending: false)
+        .limit(5);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
   static Future<List<Map<String, dynamic>>> getProfilesByRole(String role) async {
     if (role == 'teacher') {
       final response = await _client.from('profiles').select('*, teachers(wali_class_id, classes(name))').eq('role', 'teacher').order('created_at', ascending: false);
@@ -1137,6 +1150,68 @@ class SupabaseService {
       'end_time': endTime,
       'room': room,
     });
+  }
+
+  // ============================================================
+  // Notification Methods
+  // ============================================================
+
+  static Future<int> getUnreadNotificationCount() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return 0;
+    final response = await _client
+        .from('notifications')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('is_read', false);
+    return response.length;
+  }
+
+  static Future<void> markAllNotificationsAsRead() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    await _client
+        .from('notifications')
+        .update({'is_read': true})
+        .eq('user_id', userId)
+        .eq('is_read', false);
+  }
+
+  static Future<void> deleteNotification(String id) async {
+    await _client.from('notifications').delete().eq('id', id);
+  }
+
+  static Future<void> updateSchedule(
+    String id, {
+    required String classId,
+    required String teacherProfileId,
+    required String mapelName,
+    required String day,
+    required String startTime,
+    required String endTime,
+    required String room,
+  }) async {
+    // Validation: Enforce "One Subject, One Teacher per Class" rule
+    final existingConflicts = await _client.from('schedules')
+        .select('id, teacher_id')
+        .eq('class_id', classId)
+        .eq('mapel_name', mapelName)
+        .neq('teacher_id', teacherProfileId);
+
+    // If there's a conflict with ANOTHER schedule not this one
+    if (existingConflicts.where((s) => s['id'] != id).isNotEmpty) {
+      throw Exception('Mata pelajaran ini di kelas tersebut sudah diajar oleh guru lain. Satu pelajaran di satu kelas hanya boleh diajar oleh satu guru.');
+    }
+
+    await _client.from('schedules').update({
+      'class_id': classId,
+      'teacher_id': teacherProfileId,
+      'mapel_name': mapelName,
+      'day': day,
+      'start_time': startTime,
+      'end_time': endTime,
+      'room': room,
+    }).eq('id', id);
   }
 
   static Future<void> deleteSchedule(String scheduleId) async {

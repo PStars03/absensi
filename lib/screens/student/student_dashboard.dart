@@ -19,6 +19,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
   final int _currentNavIndex = 0;
   Map<String, dynamic>? _userProfile;
   bool _isLoadingProfile = true;
+  int _unreadNotifsCount = 0;
   late final Future<List<Map<String, dynamic>>> _attendancesFuture;
 
   @override
@@ -39,9 +40,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   Future<void> _fetchProfile() async {
     final profile = await SupabaseService.getCurrentUserProfile();
+    final count = await SupabaseService.getUnreadNotificationCount();
     if (mounted) {
       setState(() {
         _userProfile = profile;
+        _unreadNotifsCount = count;
         _isLoadingProfile = false;
       });
     }
@@ -116,9 +119,16 @@ class _StudentDashboardState extends State<StudentDashboard> {
                             ),
                             IconButton(
                               onPressed: () {
-                                Navigator.pushNamed(context, '/notifications');
+                                Navigator.pushNamed(context, '/notifications').then((_) {
+                                  _fetchProfile(); // refresh count when coming back
+                                });
                               },
-                              icon: const Icon(Icons.notifications_outlined),
+                              icon: Badge(
+                                isLabelVisible: _unreadNotifsCount > 0,
+                                label: Text('$_unreadNotifsCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                                backgroundColor: AppColors.error,
+                                child: const Icon(Icons.notifications_outlined),
+                              ),
                               style: IconButton.styleFrom(backgroundColor: AppColors.background),
                             ),
                           ],

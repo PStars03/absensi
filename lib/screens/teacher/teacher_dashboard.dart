@@ -98,11 +98,6 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pushNamed(context, '/notifications'),
-                    icon: const Icon(Icons.notifications_outlined),
-                    style: IconButton.styleFrom(backgroundColor: AppColors.background),
-                  ),
                 ],
               ),
               const SizedBox(height: 24),

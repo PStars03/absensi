@@ -74,7 +74,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
               NotificationService.scheduleDeadlineNotification(
                 notifId, 
                 '⏰ Pengingat Deadline Tugas', 
-                'Tugas "${t['title']}" akan ditutup dalam 15 menit!', 
+                'Tugas "${t['title']}" akan ditutup dalam 5 menit!', 
                 due
               );
             }
@@ -1143,6 +1143,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                     onPressed: () async {
                       final result = await FilePicker.pickFiles();
                       if (result != null) {
+                        if (!context.mounted) return;
                         setStateModal(() => selectedFile = File(result.files.single.path!));
                       }
                     },
@@ -1178,9 +1179,9 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                           if (!mounted) return;
                           _fetchData();
                         } catch (e) {
-                          setStateModal(() => isUploading = false);
                           if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal upload tugas: $e')));
+                          setStateModal(() => isUploading = false);
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengirim: $e')));
                         }
                       },
                       child: isUploading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Kumpulkan Tugas'),

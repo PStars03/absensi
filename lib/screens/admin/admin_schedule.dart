@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../services/supabase_service.dart';
+import 'admin_schedule_form.dart';
 
 class AdminScheduleScreen extends StatefulWidget {
   const AdminScheduleScreen({super.key});
@@ -97,10 +98,25 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
                               ],
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
-                            onPressed: () => _deleteSchedule(schedule['id']),
-                            tooltip: 'Hapus Jadwal',
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_rounded, color: AppColors.primaryBlue),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => AdminScheduleFormScreen(schedule: schedule)),
+                                  ).then((_) => _fetchSchedules());
+                                },
+                                tooltip: 'Edit Jadwal',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+                                onPressed: () => _deleteSchedule(schedule['id']),
+                                tooltip: 'Hapus Jadwal',
+                              ),
+                            ],
                           ),
                         ],
                       ),

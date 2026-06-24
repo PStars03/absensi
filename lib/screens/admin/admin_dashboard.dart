@@ -22,6 +22,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int _attendancesToday = 0;
   bool _isLoading = true;
   Map<String, dynamic>? _userProfile;
+  List<Map<String, dynamic>> _recentActivities = [];
 
   @override
   void initState() {
@@ -41,6 +42,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       final attendances = await client.from('attendances').select('id').eq('date', today);
 
       final profile = await SupabaseService.getCurrentUserProfile();
+      final activities = await SupabaseService.getRecentAttendances();
 
       if (mounted) {
         setState(() {
@@ -49,6 +51,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           _totalClasses = classes.length;
           _attendancesToday = attendances.length;
           _userProfile = profile;
+          _recentActivities = activities;
           _isLoading = false;
         });
       }
@@ -180,9 +183,45 @@ class _AdminDashboardState extends State<AdminDashboard> {
               // Recent activity
               const Text('Aktivitas Terbaru', style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
-              _buildActivityItem('Guru baru ditambahkan', 'Pak Ridwan Kamil', Icons.person_add_rounded, AppColors.success, '2 jam lalu'),
-              _buildActivityItem('Siswa diverifikasi', 'Eka Putri - 12 IPS 1', Icons.verified_rounded, AppColors.primaryBlue, '3 jam lalu'),
-              _buildActivityItem('Absensi dikoreksi', 'Citra Dewi: Alpa → Izin', Icons.edit_rounded, AppColors.warning, '5 jam lalu'),
+              if (_recentActivities.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text('Belum ada aktivitas', style: TextStyle(color: Colors.grey, fontFamily: 'Poppins')),
+                  ),
+                )
+              else
+                ..._recentActivities.map((activity) {
+                  final name = activity['profiles']?['full_name'] ?? 'Anonim';
+                  final status = activity['status'] ?? 'hadir';
+                  final className = activity['schedules']?['classes']?['name'] ?? 'Kelas';
+                  final mapel = activity['schedules']?['mapel_name'] ?? 'Mapel';
+                  final time = activity['created_at'] != null ? DateTime.parse(activity['created_at']).toLocal() : DateTime.now();
+                  final timeStr = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+                  
+                  IconData icon = Icons.verified_rounded;
+                  Color color = AppColors.success;
+                  String title = 'Absensi $status';
+                  
+                  if (status == 'terlambat') {
+                    color = AppColors.warning;
+                    icon = Icons.access_time_rounded;
+                  } else if (status == 'alpa') {
+                    color = AppColors.error;
+                    icon = Icons.cancel_rounded;
+                  } else if (status == 'izin') {
+                    color = AppColors.primaryBlue;
+                    icon = Icons.info_outline_rounded;
+                  }
+                  
+                  return _buildActivityItem(
+                    title.toUpperCase(),
+                    '$name • $className ($mapel)',
+                    icon,
+                    color,
+                    timeStr,
+                  );
+                }),
             ],
           ),
         ),

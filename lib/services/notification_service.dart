@@ -28,8 +28,8 @@ class NotificationService {
   }
 
   static Future<void> scheduleDeadlineNotification(int id, String title, String body, DateTime deadline) async {
-    // 15 minutes before deadline
-    final scheduleTime = deadline.subtract(const Duration(minutes: 15));
+    // 5 minutes before deadline
+    final scheduleTime = deadline.subtract(const Duration(minutes: 5));
     
     // If the schedule time is in the past, don't schedule
     if (scheduleTime.isBefore(DateTime.now())) return;

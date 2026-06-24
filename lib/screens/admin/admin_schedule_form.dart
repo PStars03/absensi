@@ -3,7 +3,8 @@ import '../../theme/app_theme.dart';
 import '../../services/supabase_service.dart';
 
 class AdminScheduleFormScreen extends StatefulWidget {
-  const AdminScheduleFormScreen({super.key});
+  final Map<String, dynamic>? schedule;
+  const AdminScheduleFormScreen({super.key, this.schedule});
 
   @override
   State<AdminScheduleFormScreen> createState() => _AdminScheduleFormScreenState();
@@ -19,17 +20,33 @@ class _AdminScheduleFormScreenState extends State<AdminScheduleFormScreen> {
   String? _selectedClassId;
   String? _selectedTeacherProfileId;
   
-  final _mapelCtrl = TextEditingController();
-  final _dayCtrl = TextEditingController(text: 'Senin');
-  final _startCtrl = TextEditingController(text: '08:00');
-  final _endCtrl = TextEditingController(text: '09:30');
-  final _roomCtrl = TextEditingController();
+  late final TextEditingController _mapelCtrl;
+  late final TextEditingController _dayCtrl;
+  late final TextEditingController _startCtrl;
+  late final TextEditingController _endCtrl;
+  late final TextEditingController _roomCtrl;
 
   final List<String> _days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
   @override
   void initState() {
     super.initState();
+    
+    // Initialize form with existing data if editing
+    final s = widget.schedule;
+    _selectedClassId = s?['class_id'];
+    _selectedTeacherProfileId = s?['teacher_id'];
+    _mapelCtrl = TextEditingController(text: s?['mapel_name'] ?? '');
+    _dayCtrl = TextEditingController(text: s?['day'] ?? 'Senin');
+    
+    // Substring to remove seconds if any (e.g. 08:00:00 -> 08:00)
+    final startTime = s?['start_time'] != null ? s!['start_time'].toString().substring(0, 5) : '08:00';
+    final endTime = s?['end_time'] != null ? s!['end_time'].toString().substring(0, 5) : '09:30';
+    
+    _startCtrl = TextEditingController(text: startTime);
+    _endCtrl = TextEditingController(text: endTime);
+    _roomCtrl = TextEditingController(text: s?['room'] ?? '');
+
     _fetchFormData();
   }
 
@@ -60,15 +77,28 @@ class _AdminScheduleFormScreenState extends State<AdminScheduleFormScreen> {
 
     setState(() => _isSaving = true);
     try {
-      await SupabaseService.createSchedule(
-        classId: _selectedClassId!,
-        teacherProfileId: _selectedTeacherProfileId!,
-        mapelName: _mapelCtrl.text.trim(),
-        day: _dayCtrl.text,
-        startTime: _startCtrl.text.trim(),
-        endTime: _endCtrl.text.trim(),
-        room: _roomCtrl.text.trim(),
-      );
+      if (widget.schedule == null) {
+        await SupabaseService.createSchedule(
+          classId: _selectedClassId!,
+          teacherProfileId: _selectedTeacherProfileId!,
+          mapelName: _mapelCtrl.text.trim(),
+          day: _dayCtrl.text,
+          startTime: _startCtrl.text.trim(),
+          endTime: _endCtrl.text.trim(),
+          room: _roomCtrl.text.trim(),
+        );
+      } else {
+        await SupabaseService.updateSchedule(
+          widget.schedule!['id'],
+          classId: _selectedClassId!,
+          teacherProfileId: _selectedTeacherProfileId!,
+          mapelName: _mapelCtrl.text.trim(),
+          day: _dayCtrl.text,
+          startTime: _startCtrl.text.trim(),
+          endTime: _endCtrl.text.trim(),
+          room: _roomCtrl.text.trim(),
+        );
+      }
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Jadwal berhasil disimpan')));
@@ -90,7 +120,7 @@ class _AdminScheduleFormScreenState extends State<AdminScheduleFormScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Buat Jadwal Baru', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+        title: Text(widget.schedule == null ? 'Buat Jadwal Baru' : 'Edit Jadwal', style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,

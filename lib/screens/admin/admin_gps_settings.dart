@@ -96,15 +96,15 @@ class _AdminGpsSettingsScreenState extends State<AdminGpsSettingsScreen> {
       try {
         final query = Uri.encodeComponent(searchCtrl.text);
         final response = await http.get(
-          Uri.parse('https://photon.komoot.io/api/?q=$query&limit=1'),
+          Uri.parse('https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=1'),
+          headers: {'User-Agent': 'EduPresenceApp/1.0'},
         ).timeout(const Duration(seconds: 10));
         
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
-          if (data['features'] != null && data['features'].isNotEmpty) {
-            final coords = data['features'][0]['geometry']['coordinates'];
-            final lon = (coords[0] as num).toDouble();
-            final lat = (coords[1] as num).toDouble();
+          if (data is List && data.isNotEmpty) {
+            final lat = double.parse(data[0]['lat']);
+            final lon = double.parse(data[0]['lon']);
             
             setStateModal(() {
               latCtrl.text = lat.toString();
