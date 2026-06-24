@@ -112,7 +112,7 @@ class _AdminGpsSettingsScreenState extends State<AdminGpsSettingsScreen> {
               mapController.move(LatLng(lat, lon), 16.0);
             });
           } else {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lokasi tidak ditemukan')));
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lokasi tidak ditemukan. Coba gunakan nama kota/jalan yang lebih pendek, atau geser pin langsung di peta.'), duration: Duration(seconds: 4)));
           }
         } else {
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengambil data lokasi. Error: ${response.statusCode}')));
