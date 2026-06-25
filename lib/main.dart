@@ -151,15 +151,14 @@ class _MyAppState extends State<MyApp> {
 
           // Shared
           case '/mapel-dashboard':
-            final args =
-                settings.arguments as Map<String, dynamic>? ??
-                {'scheduleId': '1', 'role': 'student'};
-            return _buildRoute(
-              MapelDashboardScreen(
+            final args = settings.arguments as Map<String, dynamic>;
+            return MaterialPageRoute(
+              builder: (_) => MapelDashboardScreen(
                 scheduleId: args['scheduleId'],
+                classId: args['classId'] ?? '',
                 role: args['role'],
               ),
-              settings,
+              settings: settings,
             );
           case '/profile':
             return _buildRoute(const ProfileScreen(), settings);

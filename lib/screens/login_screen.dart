@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gradient_button.dart';
 import '../services/supabase_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../controllers/auth_controller.dart';
 
 /// Halaman Login EduPresence
 class LoginScreen extends StatefulWidget {
@@ -17,8 +17,8 @@ class _LoginScreenState extends State<LoginScreen>
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authController = AuthController();
   bool _obscurePassword = true;
-  bool _isLoading = false;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -41,10 +41,29 @@ class _LoginScreenState extends State<LoginScreen>
       CurvedAnimation(parent: _animController, curve: Curves.easeOut),
     );
     _animController.forward();
+
+    _authController.addListener(_onAuthStateChanged);
+  }
+
+  void _onAuthStateChanged() {
+    if (!mounted) return;
+    
+    if (_authController.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_authController.errorMessage!)));
+      _authController.clearMessages();
+    }
+    if (_authController.routeToNavigate != null) {
+      Navigator.pushReplacementNamed(context, _authController.routeToNavigate!);
+      _authController.clearMessages();
+    }
+    
+    setState(() {}); // Update UI for loading state
   }
 
   @override
   void dispose() {
+    _authController.removeListener(_onAuthStateChanged);
+    _authController.dispose();
     _animController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -53,75 +72,12 @@ class _LoginScreenState extends State<LoginScreen>
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text;
 
-    setState(() => _isLoading = true);
-
-    try {
-      final email = _emailController.text.trim().toLowerCase();
-      final password = _passwordController.text;
-
-      // Real auth logic
-      await SupabaseService.signIn(email, password);
-
-      // Get profile to determine role
-      final profile = await SupabaseService.getCurrentUserProfile();
-      if (profile == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil tidak ditemukan')));
-        return;
-      }
-      
-      if (profile['is_active'] == false) {
-        await Supabase.instance.client.auth.signOut();
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Akun Anda telah dinonaktifkan oleh Admin.')));
-        return;
-      }
-
-      final role = profile['role'] as String?;
-      
-      if (role != 'admin') {
-        final hasFace = await SupabaseService.hasFaceEnrolled();
-        if (!hasFace) {
-          if (!mounted) return;
-          Navigator.pushReplacementNamed(context, '/face-enrollment');
-          return;
-        }
-      }
-
-      String route;
-      if (role == 'admin') {
-        route = '/admin-dashboard';
-      } else if (role == 'teacher') {
-        route = '/teacher-dashboard';
-      } else {
-        route = '/student-dashboard';
-      }
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, route);
-    } on AuthException catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      if (e.statusCode == '400' || e.message.toLowerCase().contains('invalid login credentials')) {
-        _showError('Email atau kata sandi salah. Silakan coba lagi.');
-      } else {
-        _showError('Gagal masuk: ${e.message}');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      _showError('Terjadi kesalahan: ${e.toString()}');
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    await _authController.login(email, password);
   }
 
   @override
@@ -248,10 +204,10 @@ class _LoginScreenState extends State<LoginScreen>
 
                       // Login button
                       GradientButton(
-                        text: 'Masuk',
+                        text: 'MASUK',
                         icon: Icons.login_rounded,
-                        isLoading: _isLoading,
-                        onPressed: _login,
+                        isLoading: _authController.isLoading,
+                        onPressed: () { _login(); },
                       ),
                       const SizedBox(height: 20),
 

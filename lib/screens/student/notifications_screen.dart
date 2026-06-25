@@ -87,60 +87,71 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   color = AppColors.primaryBlue;
               }
 
-              return Card(
-                elevation: 0,
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade200),
+              return Dismissible(
+                key: Key(notif['id'].toString()),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.error,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
                 ),
-                color: isRead ? Colors.white : AppColors.primaryBlue.withValues(alpha: 0.05),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: CircleAvatar(
-                    backgroundColor: color.withValues(alpha: 0.1),
-                    child: Icon(icon, color: color),
+                onDismissed: (direction) async {
+                  try {
+                    await SupabaseService.deleteNotification(notif['id']);
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
+                  }
+                },
+                child: Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.grey.shade200),
                   ),
-                  title: Text(
-                    notif['title'] ?? '',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
-                      fontSize: 14,
-                      color: AppColors.textPrimary,
+                  color: isRead ? Colors.white : AppColors.primaryBlue.withValues(alpha: 0.05),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: CircleAvatar(
+                      backgroundColor: color.withValues(alpha: 0.1),
+                      child: Icon(icon, color: color),
                     ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-                      Text(
-                        notif['message'] ?? '',
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                    title: Text(
+                      notif['title'] ?? '',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
+                        fontSize: 14,
+                        color: AppColors.textPrimary,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        timeString,
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                      ),
-                    ],
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey),
-                    onPressed: () async {
-                      try {
-                        await SupabaseService.deleteNotification(notif['id']);
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(
+                          notif['message'] ?? '',
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          timeString,
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                        ),
+                      ],
+                    ),
+                    onTap: () async {
+                      if (!(notif['is_read'] ?? false)) {
+                        await _supabase.from('notifications').update({'is_read': true}).eq('id', notif['id']);
                       }
                     },
                   ),
-                  onTap: () async {
-                    if (!(notif['is_read'] ?? false)) {
-                      await _supabase.from('notifications').update({'is_read': true}).eq('id', notif['id']);
-                    }
-                  },
                 ),
               );
             },

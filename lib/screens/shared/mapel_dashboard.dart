@@ -4,16 +4,19 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../services/supabase_service.dart';
+import '../../controllers/mapel_controller.dart';
 import 'package:intl/intl.dart';
 import '../../services/notification_service.dart';
 
 class MapelDashboardScreen extends StatefulWidget {
   final String scheduleId;
+  final String classId;
   final String role; // 'student' or 'teacher'
 
   const MapelDashboardScreen({
     super.key,
     required this.scheduleId,
+    required this.classId,
     required this.role,
   });
 
@@ -23,79 +26,51 @@ class MapelDashboardScreen extends StatefulWidget {
 
 class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
   int _currentIndex = 0;
-  bool _isLoading = true;
-  
-  Map<String, dynamic>? _schedule;
-  List<Map<String, dynamic>> _attendances = [];
-  List<Map<String, dynamic>> _materials = [];
-  List<Map<String, dynamic>> _tasks = [];
+  final _mapelController = MapelController();
 
   @override
   void initState() {
     super.initState();
+    
+    _mapelController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    
     _fetchData();
   }
 
   Future<void> _fetchData() async {
-    setState(() => _isLoading = true);
-    try {
-      // Fetch schedule info
-      final schedules = await SupabaseService.getSchedules();
-      final schedule = schedules.firstWhere(
-        (s) => s['id'] == widget.scheduleId,
-        orElse: () => <String, dynamic>{},
-      );
-      
-      // Fetch tab data
-      final results = await Future.wait([
-        widget.role == 'teacher'
-            ? SupabaseService.getScheduleAttendances(widget.scheduleId)
-            : SupabaseService.getMeetingsWithAttendances(widget.scheduleId),
-        SupabaseService.getMaterials(widget.scheduleId),
-        SupabaseService.getTasks(widget.scheduleId),
-      ]);
-
-      if (mounted) {
-        setState(() {
-          _schedule = schedule;
-          _attendances = results[0];
-          _materials = results[1];
-          _tasks = results[2];
-          _isLoading = false;
-        });
-        
-        // Schedule deadline notifications for students
-        if (widget.role == 'student') {
-          for (var t in _tasks) {
-            if (t['due_date'] != null) {
-              final due = DateTime.parse(t['due_date']).toLocal();
-              // Create a unique numeric ID for the notification based on task ID string
-              final notifId = t['id'].hashCode;
-              NotificationService.scheduleDeadlineNotification(
-                notifId, 
-                '⏰ Pengingat Deadline Tugas', 
-                'Tugas "${t['title']}" akan ditutup dalam 5 menit!', 
-                due
-              );
-            }
-          }
+    await _mapelController.loadDashboardData(widget.scheduleId, widget.classId, widget.role);
+    
+    if (widget.role == 'student' && _mapelController.tasks.isNotEmpty) {
+      for (var t in _mapelController.tasks) {
+        if (t['due_date'] != null) {
+          final due = DateTime.parse(t['due_date']).toLocal();
+          final notifId = t['id'].hashCode;
+          NotificationService.scheduleDeadlineNotification(
+            notifId, 
+            '⏰ Pengingat Deadline Tugas', 
+            'Tugas "${t['title']}" akan ditutup dalam 5 menit!', 
+            due
+          );
         }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat data: $e')),
-        );
       }
     }
   }
 
+  @override
+  void dispose() {
+    _mapelController.dispose();
+    super.dispose();
+  }
+
+
+
   bool _isTimeAllowed(bool isCheckOut) {
-    if (_schedule == null || _schedule!.isEmpty) return false;
-    final dayStr = _schedule!['day'] ?? '';
-    final startStr = _schedule!['start_time'] ?? '';
-    final endStr = _schedule!['end_time'] ?? '';
+    if (_mapelController.schedule == null || _mapelController.schedule!.isEmpty) return false;
+    final dayStr = _mapelController.schedule!['day'] ?? '';
+    final startStr = _mapelController.schedule!['start_time'] ?? '';
+    final endStr = _mapelController.schedule!['end_time'] ?? '';
     
     final todayInt = DateTime.now().weekday;
     final days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -113,7 +88,6 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       final endParts = endStr.split(':');
       final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
       
-      // Allow 30 minutes before class starts
       final allowedStart = startMinutes - 30;
       
       if (isCheckOut) {
@@ -128,24 +102,24 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_mapelController.isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final mapelName = _schedule?['subjects']?['name'] ?? 'Mata Pelajaran';
-    final teacherName = _schedule?['profiles']?['full_name'] ?? 'Guru';
-    final className = _schedule?['classes']?['name'] ?? 'Kelas';
+    final mapelName = _mapelController.schedule?['subjects']?['name'] ?? 'Mata Pelajaran';
+    final teacherName = _mapelController.schedule?['profiles']?['full_name'] ?? 'Guru';
+    final className = _mapelController.schedule?['classes']?['name'] ?? 'Kelas';
 
     return Scaffold(
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
             SliverAppBar(
-              expandedHeight: widget.role == 'student' ? 280 : 230,
+              expandedHeight: widget.role == 'student' ? 260 : 210,
               pinned: true,
               flexibleSpace: FlexibleSpaceBar(
                 background: Container(
-                  decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+                  decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF2563EB), Color(0xFF1E40AF)])),
                   padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,7 +135,6 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                         style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.white.withValues(alpha: 0.8)),
                       ),
                       const SizedBox(height: 16),
-                      // Scan Action
                       Row(
                         children: [
                           Expanded(
@@ -174,15 +147,15 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                                 
                                 if (widget.role == 'student') {
                                   try {
-                                    final hasStarted = await SupabaseService.hasTeacherStartedClass(widget.scheduleId);
+                                    final hasStarted = await _mapelController.hasTeacherStartedClass(widget.scheduleId);
                                     if (!hasStarted) {
                                       if (!context.mounted) return;
-                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guru belum membuka kelas (belum absen masuk). Anda belum bisa absen.')));
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guru belum membuka kelas.')));
                                       return;
                                     }
                                   } catch (e) {
                                     if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error cek status kelas: $e')));
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
                                     return;
                                   }
                                 }
@@ -197,7 +170,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                               label: Text(widget.role == 'teacher' ? 'Mengajar' : 'Masuk'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.white,
-                                foregroundColor: AppColors.primaryBlue,
+                                foregroundColor: const Color(0xFF2563EB),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
                             ),
@@ -268,7 +241,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
           });
         },
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppColors.primaryBlue,
+        selectedItemColor: const Color(0xFF2563EB),
         unselectedItemColor: Colors.grey.shade400,
         selectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12),
         unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500, fontSize: 11),
@@ -294,8 +267,8 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
     }
   }
 
-  Widget? _buildFab() {
-    if (widget.role != 'teacher') return null;
+  Widget _buildFab() {
+    if (widget.role != 'teacher') return const SizedBox.shrink();
 
     IconData icon;
     String tooltip;
@@ -305,22 +278,15 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       case 1:
         icon = Icons.upload_file_rounded;
         tooltip = 'Tambah Materi';
-        onPressed = () => _showAddMaterialDialog();
+        onPressed = _showAddMaterialDialog;
         break;
       case 2:
         icon = Icons.add_task_rounded;
-        tooltip = 'Buat Tugas';
-        onPressed = () => _showAddTaskDialog();
-        break;
-      case 3:
-        icon = Icons.post_add_rounded;
-        tooltip = 'Buat Kuis';
-        onPressed = () {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kuis coming soon di Phase 3')));
-        };
+        tooltip = 'Tambah Tugas';
+        onPressed = _showAddTaskDialog;
         break;
       default:
-        return null;
+        return const SizedBox.shrink();
     }
 
     return FloatingActionButton(
@@ -329,10 +295,6 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       child: Icon(icon),
     );
   }
-
-  // =========================================================================
-  // Absensi & Izin
-  // =========================================================================
 
   void _showIzinForm() {
     File? suratIzinFile;
@@ -345,15 +307,14 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateModal) {
-          return SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: 24, right: 24, top: 24,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24, right: 24, top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 20),
@@ -381,25 +342,29 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                     final result = await FilePicker.pickFiles(type: FileType.image);
                     if (result != null) setStateModal(() => fotoOrtuFile = File(result.files.single.path!));
                   },
-                  icon: const Icon(Icons.family_restroom_rounded),
+                  icon: const Icon(Icons.camera_alt_rounded),
                   label: Text(fotoOrtuFile != null ? '✅ Foto Terlampir' : 'Pilih Foto Bersama'),
                 ),
-                
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: isSaving || suratIzinFile == null || fotoOrtuFile == null ? null : () async {
+                    onPressed: isSaving ? null : () async {
+                      if (suratIzinFile == null || fotoOrtuFile == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Harap lengkapi kedua foto lampiran')));
+                        return;
+                      }
+
                       setStateModal(() => isSaving = true);
                       try {
                         final studentId = SupabaseService.currentUser!.id;
                         final timestamp = DateTime.now().millisecondsSinceEpoch;
                         
+                        final suratExt = suratIzinFile!.path.split('.').last.toLowerCase();
+                        final ortuExt = fotoOrtuFile!.path.split('.').last.toLowerCase();
+
                         final suratBytes = await suratIzinFile!.readAsBytes();
                         final ortuBytes = await fotoOrtuFile!.readAsBytes();
-
-                        final suratExt = suratIzinFile!.path.split('.').last;
-                        final ortuExt = fotoOrtuFile!.path.split('.').last;
 
                         final suratUrl = await SupabaseService.uploadFile(
                           bucket: 'attendance_docs',
@@ -435,7 +400,6 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                 ),
               ],
             ),
-            ),
           );
         }
       ),
@@ -466,7 +430,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                 const Text('Rangkuman Pertemuan', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 const Text('Silakan isi rangkuman materi untuk pertemuan ini.', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 TextField(
                   controller: summaryCtrl,
                   maxLines: 4,
@@ -504,22 +468,16 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
   }
 
   Widget _buildAbsensiTab() {
-    if (_attendances.isEmpty) {
+    if (_mapelController.attendances.isEmpty) {
       return Center(child: Text(widget.role == 'teacher' ? 'Belum ada data absensi' : 'Belum ada data pertemuan', style: const TextStyle(fontFamily: 'Poppins')));
     }
 
     if (widget.role == 'student') {
       return ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _attendances.length,
+        itemCount: _mapelController.attendances.length,
         itemBuilder: (context, index) {
-          final m = _attendances[index];
-          final pertemuan = m['meeting_number'] ?? '-';
-          final date = m['date'] ?? '-';
-          final mapel = m['schedules']?['mapel_name'] ?? '-';
-          final summary = m['summary'] ?? 'Tidak ada rangkuman';
-          final status = m['status'] ?? 'alpa';
-
+          final m = _mapelController.attendances[index];
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: Padding(
@@ -530,16 +488,16 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Pertemuan $pertemuan', style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 16)),
-                      _buildStatusBadge(status),
+                      Text('Pertemuan ${m['meeting_number'] ?? '-'}', style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 16)),
+                      _buildStatusBadge(m['status'] ?? 'alpa'),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text('$date • $mapel', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  Text('${m['date'] ?? '-'} • ${m['schedules']?['mapel_name'] ?? '-'}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                   const SizedBox(height: 12),
                   const Text('Rangkuman:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 4),
-                  Text(summary, style: const TextStyle(fontSize: 14)),
+                  Text(m['summary'] ?? 'Tidak ada rangkuman', style: const TextStyle(fontSize: 14)),
                 ],
               ),
             ),
@@ -548,12 +506,11 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
       );
     }
 
-    // Teacher View (Absensi List)
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _attendances.length,
+      itemCount: _mapelController.attendances.length,
       itemBuilder: (context, index) {
-        final a = _attendances[index];
+        final a = _mapelController.attendances[index];
         final userName = a['profiles']?['full_name'] ?? 'User';
         final checkIn = a['check_in']?.toString().substring(0, 5) ?? '-';
         final checkOut = a['check_out'] != null ? a['check_out'].toString().substring(0, 5) : '-';
@@ -562,8 +519,8 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-              child: Text(userName.isNotEmpty ? userName[0] : '?', style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.bold)),
+              backgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
+              child: Text(userName.isNotEmpty ? userName[0] : '?', style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
             ),
             title: Text(userName, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             subtitle: Text('${a['date']} • Masuk: $checkIn ${checkOut != "-" ? "• Pulang: $checkOut" : ""}', style: const TextStyle(fontSize: 12)),
@@ -712,20 +669,16 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
     }
   }
 
-  // =========================================================================
-  // Materi
-  // =========================================================================
-
   Widget _buildMateriTab() {
-    if (_materials.isEmpty) {
+    if (_mapelController.materiList.isEmpty) {
       return const Center(child: Text('Belum ada materi', style: TextStyle(fontFamily: 'Poppins')));
     }
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _materials.length,
+      itemCount: _mapelController.materiList.length,
       itemBuilder: (context, index) {
-        final m = _materials[index];
+        final m = _mapelController.materiList[index];
         final isPdf = m['file_type'] == 'pdf';
         final iconColor = isPdf ? const Color(0xFFEF4444) : const Color(0xFF6366F1);
         final iconData = isPdf ? Icons.picture_as_pdf_rounded : Icons.description_rounded;
@@ -746,7 +699,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                 if (m['file_url'] != null)
                   IconButton(
                     icon: const Icon(Icons.download_rounded),
-                    color: AppColors.primaryBlue,
+                    color: const Color(0xFF2563EB),
                     onPressed: () => _openUrl(m['file_url']),
                   ),
                 if (widget.role == 'teacher')
@@ -840,7 +793,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                         if (!ctx.mounted) return;
                         Navigator.pop(ctx);
                         if (!mounted) return;
-                        _fetchData(); // Refresh data
+                        _fetchData();
                       } catch (e) {
                         setStateModal(() => isUploading = false);
                         if (!context.mounted) return;
@@ -858,20 +811,16 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
     );
   }
 
-  // =========================================================================
-  // Tugas
-  // =========================================================================
-
   Widget _buildTugasTab() {
-    if (_tasks.isEmpty) {
+    if (_mapelController.tasks.isEmpty) {
       return const Center(child: Text('Belum ada tugas', style: TextStyle(fontFamily: 'Poppins')));
     }
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _tasks.length,
+      itemCount: _mapelController.tasks.length,
       itemBuilder: (context, index) {
-        final t = _tasks[index];
+        final t = _mapelController.tasks[index];
         final deadlineStr = t['deadline'] != null ? DateFormat('dd MMM yyyy, HH:mm').format(DateTime.parse(t['deadline'])) : '-';
 
         return Card(
@@ -887,7 +836,7 @@ class _MapelDashboardScreenState extends State<MapelDashboardScreen> {
                     onTap: () => _openUrl(t['file_url']),
                     child: const Padding(
                       padding: EdgeInsets.only(top: 4.0),
-                      child: Text('📎 Lihat Lampiran', style: TextStyle(fontSize: 12, color: AppColors.primaryBlue, fontWeight: FontWeight.bold)),
+                      child: Text('📎 Lihat Lampiran', style: TextStyle(fontSize: 12, color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
                     ),
                   ),
               ],
